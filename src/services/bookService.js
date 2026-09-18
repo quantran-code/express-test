@@ -2,18 +2,22 @@ const crypto = require('crypto');
 
 let books = [];
 
-function isNonEmptyString(value) {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
-function isPositiveInteger(value) {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+function resetBooks() {
+  books = [];
 }
 
 function createError(message, status) {
   const error = new Error(message);
   error.status = status;
   return error;
+}
+
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isPositiveInteger(value) {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
 function createBook(data) {
@@ -27,16 +31,18 @@ function createBook(data) {
     throw createError('totalCopies is required and must be an integer greater than 0', 400);
   }
 
-  if (books.some((book) => book.isbn === isbn)) {
-    throw createError(`A book with isbn "${isbn}" already exists`, 409);
+  const normalizedIsbn = isbn.trim();
+
+  if (books.some((book) => book.isbn === normalizedIsbn)) {
+    throw createError(`A book with isbn "${normalizedIsbn}" already exists`, 409);
   }
 
   const now = new Date().toISOString();
   const book = {
     id: crypto.randomUUID(),
-    title,
-    author,
-    isbn,
+    title: title.trim(),
+    author: author.trim(),
+    isbn: normalizedIsbn,
     totalCopies,
     availableCopies: totalCopies,
     createdAt: now,
@@ -67,14 +73,14 @@ function updateBook(id, data) {
     if (!isNonEmptyString(title)) {
       throw createError('title must be a non-empty string', 400);
     }
-    book.title = title;
+    book.title = title.trim();
   }
 
   if (author !== undefined) {
     if (!isNonEmptyString(author)) {
       throw createError('author must be a non-empty string', 400);
     }
-    book.author = author;
+    book.author = author.trim();
   }
 
   if (totalCopies !== undefined) {
@@ -111,15 +117,11 @@ function deleteBook(id) {
   return true;
 }
 
-function resetStore() {
-  books = [];
-}
-
 module.exports = {
   createBook,
   listBooks,
   getBookById,
   updateBook,
   deleteBook,
-  resetStore,
+  resetBooks,
 };
