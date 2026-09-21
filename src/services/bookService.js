@@ -1,5 +1,3 @@
-const books = [];
-
 function createError(message, status) {
   const err = new Error(message);
   err.status = status;
@@ -13,6 +11,8 @@ function isNonEmptyString(value) {
 function isPositiveInteger(value) {
   return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
+
+const books = [];
 
 function createBook(data) {
   const { title, author, isbn, totalCopies } = data || {};
@@ -47,12 +47,12 @@ function createBook(data) {
   return book;
 }
 
-function listBooks() {
+function getAllBooks() {
   return books;
 }
 
 function getBookById(id) {
-  return books.find((book) => book.id === id);
+  return books.find((b) => b.id === id);
 }
 
 function updateBook(id, data) {
@@ -61,7 +61,11 @@ function updateBook(id, data) {
     throw createError('Book not found', 404);
   }
 
-  const { title, author, totalCopies } = data || {};
+  const { availableCopies, title, author, totalCopies } = data || {};
+
+  if (availableCopies !== undefined) {
+    // ignore silently
+  }
 
   if (title !== undefined) {
     if (!isNonEmptyString(title)) {
@@ -113,8 +117,9 @@ function deleteBook(id) {
 }
 
 module.exports = {
+  createError,
   createBook,
-  listBooks,
+  getAllBooks,
   getBookById,
   updateBook,
   deleteBook,
