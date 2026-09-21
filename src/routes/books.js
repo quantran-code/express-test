@@ -1,11 +1,26 @@
 const express = require('express');
-const bookService = require('../services/bookService');
+const {
+  createBook,
+  getAllBooks,
+  getBookById,
+  updateBook,
+  deleteBook,
+} = require('../services/bookService');
 
 const router = express.Router();
 
+router.post('/', async (req, res, next) => {
+  try {
+    const book = createBook(req.body);
+    res.status(201).json(book);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/', (req, res, next) => {
   try {
-    res.status(200).json(bookService.getAllBooks());
+    res.status(200).json(getAllBooks());
   } catch (err) {
     next(err);
   }
@@ -13,7 +28,7 @@ router.get('/', (req, res, next) => {
 
 router.get('/:id', (req, res, next) => {
   try {
-    const book = bookService.getBookById(req.params.id);
+    const book = getBookById(req.params.id);
     if (!book) {
       const err = new Error('Book not found');
       err.status = 404;
@@ -25,21 +40,10 @@ router.get('/:id', (req, res, next) => {
   }
 });
 
-router.post('/', (req, res, next) => {
+router.patch('/:id', async (req, res, next) => {
   try {
-    const { availableCopies, ...data } = req.body || {};
-    const created = bookService.createBook(data);
-    res.status(201).json(created);
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.patch('/:id', (req, res, next) => {
-  try {
-    const { availableCopies, ...data } = req.body || {};
-    const updated = bookService.updateBook(req.params.id, data);
-    res.status(200).json(updated);
+    const book = updateBook(req.params.id, req.body);
+    res.status(200).json(book);
   } catch (err) {
     next(err);
   }
@@ -47,7 +51,7 @@ router.patch('/:id', (req, res, next) => {
 
 router.delete('/:id', (req, res, next) => {
   try {
-    bookService.deleteBook(req.params.id);
+    deleteBook(req.params.id);
     res.status(204).send();
   } catch (err) {
     next(err);

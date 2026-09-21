@@ -1,3 +1,7 @@
+const crypto = require('crypto');
+
+let books = [];
+
 function createError(message, status) {
   const err = new Error(message);
   err.status = status;
@@ -9,26 +13,32 @@ function isNonEmptyString(value) {
 }
 
 function isPositiveInteger(value) {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+  return Number.isInteger(value) && value > 0;
 }
-
-const books = [];
 
 function createBook(data) {
   const { title, author, isbn, totalCopies } = data || {};
 
-  if (!isNonEmptyString(title) || !isNonEmptyString(author) || !isNonEmptyString(isbn)) {
-    throw createError('title, author, and isbn are required non-empty strings', 400);
+  if (!isNonEmptyString(title)) {
+    throw createError('title must be a non-empty string', 400);
+  }
+
+  if (!isNonEmptyString(author)) {
+    throw createError('author must be a non-empty string', 400);
+  }
+
+  if (!isNonEmptyString(isbn)) {
+    throw createError('isbn must be a non-empty string', 400);
   }
 
   if (!isPositiveInteger(totalCopies)) {
-    throw createError('totalCopies is required and must be an integer greater than 0', 400);
+    throw createError('totalCopies must be an integer greater than 0', 400);
   }
 
   const normalizedIsbn = isbn.trim();
-
-  if (books.some((book) => book.isbn === normalizedIsbn)) {
-    throw createError(`A book with isbn "${normalizedIsbn}" already exists`, 409);
+  const existing = books.find((b) => b.isbn === normalizedIsbn);
+  if (existing) {
+    throw createError('isbn must be unique', 409);
   }
 
   const now = new Date().toISOString();
@@ -61,10 +71,10 @@ function updateBook(id, data) {
     throw createError('Book not found', 404);
   }
 
-  const { availableCopies, title, author, totalCopies } = data || {};
+  const { title, author, isbn, totalCopies } = data || {};
 
-  if (availableCopies !== undefined) {
-    // ignore silently
+  if (isbn !== undefined) {
+    throw createError('isbn is immutable', 400);
   }
 
   if (title !== undefined) {
@@ -86,15 +96,8 @@ function updateBook(id, data) {
       throw createError('totalCopies must be an integer greater than 0', 400);
     }
 
-    const onLoan = book.totalCopies - book.availableCopies;
-    const newAvailableCopies = totalCopies - onLoan;
-
-    if (newAvailableCopies < 0) {
-      throw createError('totalCopies cannot be less than the number of copies currently on loan', 400);
-    }
-
     book.totalCopies = totalCopies;
-    book.availableCopies = newAvailableCopies;
+    book.availableCopies = totalCopies;
   }
 
   book.updatedAt = new Date().toISOString();
@@ -111,13 +114,12 @@ function deleteBook(id) {
     throw createError('Cannot delete a book while copies are on loan', 409);
   }
 
-  const index = books.findIndex((b) => b.id === id);
-  books.splice(index, 1);
+  books = books.filter((b) => b.id !== id);
   return true;
 }
 
 module.exports = {
-  createError,
+  books,
   createBook,
   getAllBooks,
   getBookById,
