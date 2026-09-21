@@ -2,10 +2,6 @@ const crypto = require('crypto');
 
 let books = [];
 
-function resetBooks() {
-  books = [];
-}
-
 function createError(message, status) {
   const error = new Error(message);
   error.status = status;
@@ -17,11 +13,11 @@ function isNonEmptyString(value) {
 }
 
 function isPositiveInteger(value) {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+  return Number.isInteger(value) && value > 0;
 }
 
 function createBook(data) {
-  const { title, author, isbn, totalCopies } = data || {};
+  const { title, author, isbn, totalCopies, availableCopies } = data || {};
 
   if (!isNonEmptyString(title) || !isNonEmptyString(author) || !isNonEmptyString(isbn)) {
     throw createError('title, author, and isbn are required non-empty strings', 400);
@@ -123,5 +119,4 @@ module.exports = {
   getBookById,
   updateBook,
   deleteBook,
-  resetBooks,
 };
