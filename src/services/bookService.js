@@ -1,5 +1,18 @@
-const crypto = require('crypto');
+const { randomUUID } = require('crypto');
 
+/**
+ * @typedef {Object} Book
+ * @property {string} id
+ * @property {string} title
+ * @property {string} author
+ * @property {string} isbn
+ * @property {number} totalCopies
+ * @property {number} availableCopies
+ * @property {string} createdAt
+ * @property {string} updatedAt
+ */
+
+/** @type {Book[]} */
 let books = [];
 
 function createError(message, status) {
@@ -13,9 +26,13 @@ function isNonEmptyString(value) {
 }
 
 function isPositiveInteger(value) {
-  return Number.isInteger(value) && value > 0;
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
+/**
+ * @param {{title:string,author:string,isbn:string,totalCopies:number}} data
+ * @returns {Book}
+ */
 function createBook(data) {
   const { title, author, isbn, totalCopies } = data || {};
 
@@ -35,18 +52,17 @@ function createBook(data) {
     throw createError('totalCopies must be an integer greater than 0', 400);
   }
 
-  const normalizedIsbn = isbn.trim();
-  const existing = books.find((b) => b.isbn === normalizedIsbn);
+  const existing = books.find((b) => b.isbn === isbn);
   if (existing) {
-    throw createError('isbn must be unique', 409);
+    throw createError('Duplicate isbn', 409);
   }
 
   const now = new Date().toISOString();
   const book = {
-    id: crypto.randomUUID(),
+    id: randomUUID(),
     title: title.trim(),
     author: author.trim(),
-    isbn: normalizedIsbn,
+    isbn: isbn.trim(),
     totalCopies,
     availableCopies: totalCopies,
     createdAt: now,
@@ -57,25 +73,35 @@ function createBook(data) {
   return book;
 }
 
+/**
+ * @returns {Book[]}
+ */
 function getAllBooks() {
   return books;
 }
 
+/**
+ * @param {string} id
+ * @returns {Book|undefined}
+ */
 function getBookById(id) {
   return books.find((b) => b.id === id);
 }
 
+/**
+ * @param {string} id
+ * @param {{title?:string,author?:string,totalCopies?:number,availableCopies?:number}} data
+ * @returns {Book}
+ */
 function updateBook(id, data) {
   const book = getBookById(id);
   if (!book) {
     throw createError('Book not found', 404);
   }
 
-  const { title, author, isbn, totalCopies } = data || {};
+  const { title, author, totalCopies } = data || {};
 
-  if (isbn !== undefined) {
-    throw createError('isbn is immutable', 400);
-  }
+  // ignore any user-supplied availableCopies
 
   if (title !== undefined) {
     if (!isNonEmptyString(title)) {
@@ -96,14 +122,26 @@ function updateBook(id, data) {
       throw createError('totalCopies must be an integer greater than 0', 400);
     }
 
+    const onLoan = book.totalCopies - book.availableCopies;
+    const newAvailableCopies = totalCopies - onLoan;
+
+    if (newAvailableCopies < 0) {
+      throw createError('totalCopies cannot be less than the number of copies currently on loan', 400);
+    }
+
+    // keep within invariants: if onLoan is computed correctly, availableCopies will never exceed totalCopies
     book.totalCopies = totalCopies;
-    book.availableCopies = totalCopies;
+    book.availableCopies = newAvailableCopies;
   }
 
   book.updatedAt = new Date().toISOString();
   return book;
 }
 
+/**
+ * @param {string} id
+ * @returns {boolean}
+ */
 function deleteBook(id) {
   const book = getBookById(id);
   if (!book) {
@@ -119,7 +157,6 @@ function deleteBook(id) {
 }
 
 module.exports = {
-  books,
   createBook,
   getAllBooks,
   getBookById,
