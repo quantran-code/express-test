@@ -1,5 +1,3 @@
-const { randomUUID } = require('crypto');
-
 const books = [];
 
 function createError(message, status) {
@@ -13,7 +11,7 @@ function isNonEmptyString(value) {
 }
 
 function isPositiveInteger(value) {
-  return Number.isInteger(value) && value > 0;
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
 function createBook(data) {
@@ -35,7 +33,7 @@ function createBook(data) {
 
   const now = new Date().toISOString();
   const book = {
-    id: randomUUID(),
+    id: crypto.randomUUID(),
     title: title.trim(),
     author: author.trim(),
     isbn: normalizedIsbn,
@@ -49,12 +47,12 @@ function createBook(data) {
   return book;
 }
 
-function getAllBooks() {
+function listBooks() {
   return books;
 }
 
 function getBookById(id) {
-  return books.find((b) => b.id === id);
+  return books.find((book) => book.id === id);
 }
 
 function updateBook(id, data) {
@@ -116,7 +114,7 @@ function deleteBook(id) {
 
 module.exports = {
   createBook,
-  getAllBooks,
+  listBooks,
   getBookById,
   updateBook,
   deleteBook,
