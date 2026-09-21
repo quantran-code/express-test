@@ -1,4 +1,5 @@
 const express = require('express');
+
 const bookService = require('../services/bookService');
 
 const router = express.Router();
@@ -15,8 +16,7 @@ router.post('/', (req, res, next) => {
 
 router.get('/', (req, res, next) => {
   try {
-    const books = bookService.listBooks();
-    res.status(200).json(books);
+    res.status(200).json(bookService.getAllBooks());
   } catch (err) {
     next(err);
   }

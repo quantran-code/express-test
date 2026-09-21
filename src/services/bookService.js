@@ -1,11 +1,11 @@
-const crypto = require('crypto');
+const { randomUUID } = require('crypto');
 
-let books = [];
+const books = [];
 
 function createError(message, status) {
-  const error = new Error(message);
-  error.status = status;
-  return error;
+  const err = new Error(message);
+  err.status = status;
+  return err;
 }
 
 function isNonEmptyString(value) {
@@ -17,7 +17,7 @@ function isPositiveInteger(value) {
 }
 
 function createBook(data) {
-  const { title, author, isbn, totalCopies, availableCopies } = data || {};
+  const { title, author, isbn, totalCopies } = data || {};
 
   if (!isNonEmptyString(title) || !isNonEmptyString(author) || !isNonEmptyString(isbn)) {
     throw createError('title, author, and isbn are required non-empty strings', 400);
@@ -35,7 +35,7 @@ function createBook(data) {
 
   const now = new Date().toISOString();
   const book = {
-    id: crypto.randomUUID(),
+    id: randomUUID(),
     title: title.trim(),
     author: author.trim(),
     isbn: normalizedIsbn,
@@ -49,12 +49,12 @@ function createBook(data) {
   return book;
 }
 
-function listBooks() {
+function getAllBooks() {
   return books;
 }
 
 function getBookById(id) {
-  return books.find((book) => book.id === id);
+  return books.find((b) => b.id === id);
 }
 
 function updateBook(id, data) {
@@ -109,13 +109,14 @@ function deleteBook(id) {
     throw createError('Cannot delete a book while copies are on loan', 409);
   }
 
-  books = books.filter((b) => b.id !== id);
+  const index = books.findIndex((b) => b.id === id);
+  books.splice(index, 1);
   return true;
 }
 
 module.exports = {
   createBook,
-  listBooks,
+  getAllBooks,
   getBookById,
   updateBook,
   deleteBook,
