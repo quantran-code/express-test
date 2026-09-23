@@ -12,27 +12,17 @@ router.post('/', (req, res, next) => {
   }
 });
 
-router.get('/', (req, res, next) => {
-  try {
-    res.status(200).json(getAllBooks());
-  } catch (err) {
-    next(err);
-  }
+router.get('/', (req, res) => {
+  res.status(200).json(getAllBooks());
 });
 
-router.get('/:id', (req, res, next) => {
-  try {
-    const book = getBookById(req.params.id);
-    if (!book) {
-      // match error payload shape from error handler
-      const err = new Error('Book not found');
-      err.status = 404;
-      throw err;
-    }
-    res.status(200).json(book);
-  } catch (err) {
-    next(err);
+router.get('/:id', (req, res) => {
+  const book = getBookById(req.params.id);
+  if (!book) {
+    return res.status(404).json({ error: 'Book not found' });
   }
+
+  res.status(200).json(book);
 });
 
 router.patch('/:id', (req, res, next) => {

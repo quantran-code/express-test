@@ -1,19 +1,12 @@
-const { randomUUID } = require('crypto');
-
-/**
- * @typedef {Object} Book
- * @property {string} id
- * @property {string} title
- * @property {string} author
- * @property {string} isbn
- * @property {number} totalCopies
- * @property {number} availableCopies
- * @property {string} createdAt
- * @property {string} updatedAt
- */
-
-/** @type {Book[]} */
 let books = [];
+
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isPositiveInteger(value) {
+  return Number.isInteger(value) && value > 0;
+}
 
 function createError(message, status) {
   const err = new Error(message);
@@ -21,18 +14,6 @@ function createError(message, status) {
   return err;
 }
 
-function isNonEmptyString(value) {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
-function isPositiveInteger(value) {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0;
-}
-
-/**
- * @param {{title:string,author:string,isbn:string,totalCopies:number}} data
- * @returns {Book}
- */
 function createBook(data) {
   const { title, author, isbn, totalCopies } = data || {};
 
@@ -54,45 +35,32 @@ function createBook(data) {
 
   const existing = books.find((b) => b.isbn === isbn);
   if (existing) {
-    throw createError('Duplicate isbn', 409);
+    throw createError('isbn already exists', 409);
   }
 
-  const now = new Date().toISOString();
   const book = {
-    id: randomUUID(),
+    id: String(Date.now() + Math.random()),
     title: title.trim(),
     author: author.trim(),
     isbn: isbn.trim(),
     totalCopies,
     availableCopies: totalCopies,
-    createdAt: now,
-    updatedAt: now,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 
   books.push(book);
   return book;
 }
 
-/**
- * @returns {Book[]}
- */
 function getAllBooks() {
   return books;
 }
 
-/**
- * @param {string} id
- * @returns {Book|undefined}
- */
 function getBookById(id) {
   return books.find((b) => b.id === id);
 }
 
-/**
- * @param {string} id
- * @param {{title?:string,author?:string,totalCopies?:number,availableCopies?:number}} data
- * @returns {Book}
- */
 function updateBook(id, data) {
   const book = getBookById(id);
   if (!book) {
@@ -100,8 +68,6 @@ function updateBook(id, data) {
   }
 
   const { title, author, totalCopies } = data || {};
-
-  // ignore any user-supplied availableCopies
 
   if (title !== undefined) {
     if (!isNonEmptyString(title)) {
@@ -138,10 +104,6 @@ function updateBook(id, data) {
   return book;
 }
 
-/**
- * @param {string} id
- * @returns {boolean}
- */
 function deleteBook(id) {
   const book = getBookById(id);
   if (!book) {
