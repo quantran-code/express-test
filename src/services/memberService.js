@@ -5,8 +5,10 @@ const {
   createMemberRecord,
   deleteMemberRecord,
 } = require('../storage/members');
+const { hashPassword, hashPasswordSync, comparePassword } = require('../utils/password');
 
 const VALID_ROLES = ['member', 'librarian'];
+const MIN_PASSWORD_LENGTH = 8;
 
 function createError(message, status) {
   const err = new Error(message);
@@ -22,8 +24,12 @@ function isValidRole(value) {
   return VALID_ROLES.includes(value);
 }
 
-function createMember(data) {
-  const { name, email, role } = data || {};
+function isValidPassword(value) {
+  return typeof value === 'string' && value.length >= MIN_PASSWORD_LENGTH;
+}
+
+async function createMember(data) {
+  const { name, email, role, password } = data || {};
 
   if (!isNonEmptyString(name)) {
     throw createError('name must be a non-empty string', 400);
@@ -31,6 +37,10 @@ function createMember(data) {
 
   if (!isNonEmptyString(email)) {
     throw createError('email must be a non-empty string', 400);
+  }
+
+  if (!isValidPassword(password)) {
+    throw createError(`password must be a string with at least ${MIN_PASSWORD_LENGTH} characters`, 400);
   }
 
   let memberRole = 'member';
@@ -47,11 +57,38 @@ function createMember(data) {
     throw createError('email must be unique', 400);
   }
 
+  const passwordHash = await hashPassword(password);
+
   return createMemberRecord({
     name: name.trim(),
     email: trimmedEmail,
     role: memberRole,
+    passwordHash,
   });
+}
+
+async function register(data) {
+  const { name, email, password } = data || {};
+
+  return createMember({ name, email, password, role: 'member' });
+}
+
+async function verifyCredentials(email, password) {
+  if (!isNonEmptyString(email) || typeof password !== 'string' || password.length === 0) {
+    return null;
+  }
+
+  const member = findMemberByEmail(email.trim());
+  if (!member || !member.passwordHash) {
+    return null;
+  }
+
+  const matches = await comparePassword(password, member.passwordHash);
+  if (!matches) {
+    return null;
+  }
+
+  return member;
 }
 
 function listMembers() {
@@ -104,8 +141,26 @@ function deleteMember(id) {
   deleteMemberRecord(member.id);
 }
 
+function seedLibrarian() {
+  const email = 'librarian@example.com';
+  if (findMemberByEmail(email)) {
+    return;
+  }
+
+  createMemberRecord({
+    name: 'Seed Librarian',
+    email,
+    role: 'librarian',
+    passwordHash: hashPasswordSync('LibrarianPass123'),
+  });
+}
+
+seedLibrarian();
+
 module.exports = {
   createMember,
+  register,
+  verifyCredentials,
   listMembers,
   getMemberById,
   updateMember,

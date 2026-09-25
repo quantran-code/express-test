@@ -63,8 +63,14 @@ router.get('/:id/loans', (req, res, next) => {
   }
 });
 
-router.patch('/:id', requireRole('librarian'), (req, res, next) => {
+router.patch('/:id', (req, res, next) => {
   try {
+    // eslint-disable-next-line eqeqeq
+    const isSelf = req.user && req.user.id == req.params.id;
+    if (req.user.role !== 'librarian' && !isSelf) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     const updated = memberService.updateMember(req.params.id, req.body);
     res.status(200).json(updated);
   } catch (err) {
@@ -72,8 +78,14 @@ router.patch('/:id', requireRole('librarian'), (req, res, next) => {
   }
 });
 
-router.delete('/:id', requireRole('librarian'), (req, res, next) => {
+router.delete('/:id', (req, res, next) => {
   try {
+    // eslint-disable-next-line eqeqeq
+    const isSelf = req.user && req.user.id == req.params.id;
+    if (req.user.role !== 'librarian' && !isSelf) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     memberService.deleteMember(req.params.id);
     res.status(204).end();
   } catch (err) {

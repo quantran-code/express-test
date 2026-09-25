@@ -15,12 +15,13 @@ function findMemberByEmail(email, excludeId) {
 }
 
 function createMemberRecord(data) {
-  const { name, email, role } = data;
+  const { name, email, role, passwordHash } = data;
   const member = {
     id: nextId,
     name,
     email,
     role,
+    passwordHash: passwordHash === undefined ? null : passwordHash,
   };
   nextId += 1;
   members.push(member);

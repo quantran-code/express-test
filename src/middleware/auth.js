@@ -1,20 +1,25 @@
-const memberService = require('../services/memberService');
+const { verifyToken } = require('../utils/jwt');
 
 function authenticate(req, res, next) {
-  const memberId = req.header('x-member-id');
+  const authHeader = req.header('authorization') || req.header('Authorization');
 
-  if (!memberId) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const member = memberService.getMemberById(memberId);
+  const token = authHeader.slice('Bearer '.length).trim();
 
-  if (!member) {
+  if (!token) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  req.user = { id: member.id, role: member.role };
-  next();
+  try {
+    const payload = verifyToken(token);
+    req.user = { id: payload.id, role: payload.role };
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
 }
 
 function requireRole(role) {
