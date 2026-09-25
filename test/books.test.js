@@ -111,12 +111,86 @@ describe('GET /books', () => {
 
     const res = await request(app).get('/books');
     expect(res.status).toBe(200);
-    expect(Array.isArray(res.body)).toBe(true);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body).toMatchObject({ page: 1, pageSize: 10 });
+    expect(typeof res.body.total).toBe('number');
 
-    const firstIndex = res.body.findIndex((b) => b.id === first.body.id);
-    const secondIndex = res.body.findIndex((b) => b.id === second.body.id);
+    const firstIndex = res.body.data.findIndex((b) => b.id === first.body.id);
+    const secondIndex = res.body.data.findIndex((b) => b.id === second.body.id);
     expect(firstIndex).toBeGreaterThanOrEqual(0);
     expect(secondIndex).toBeGreaterThan(firstIndex);
+  });
+
+  it('searches books by title case-insensitively', async () => {
+    const created = await request(app).post('/books').send({
+      title: 'Clean Code',
+      author: 'Robert C. Martin',
+      isbn: 'ISBN-SEARCH-TITLE',
+      totalCopies: 2,
+    });
+    expect(created.status).toBe(201);
+
+    const res = await request(app).get('/books').query({ q: 'clean' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.some((b) => b.id === created.body.id)).toBe(true);
+  });
+
+  it('searches books by author case-insensitively', async () => {
+    const created = await request(app).post('/books').send({
+      title: 'Some Title',
+      author: 'Martin Fowler',
+      isbn: 'ISBN-SEARCH-AUTHOR',
+      totalCopies: 2,
+    });
+    expect(created.status).toBe(201);
+
+    const res = await request(app).get('/books').query({ q: 'fowler' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.some((b) => b.id === created.body.id)).toBe(true);
+  });
+
+  it('paginates results and reports the correct total', async () => {
+    const isbnPrefix = `ISBN-PAGINATE-${Date.now()}`;
+    const created = [];
+    for (let i = 0; i < 3; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await request(app).post('/books').send({
+        title: `Paginate Book ${i}`,
+        author: 'Paginate Author',
+        isbn: `${isbnPrefix}-${i}`,
+        totalCopies: 1,
+      });
+      created.push(res.body);
+    }
+
+    const res = await request(app)
+      .get('/books')
+      .query({ q: 'Paginate Book', page: 2, pageSize: 1 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.page).toBe(2);
+    expect(res.body.pageSize).toBe(1);
+    expect(res.body.total).toBe(3);
+    expect(res.body.data.length).toBe(1);
+    expect(res.body.data[0].id).toBe(created[1].id);
+  });
+
+  it('rejects page < 1 (400)', async () => {
+    const res = await request(app).get('/books').query({ page: 0 });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'Invalid pagination' });
+  });
+
+  it('rejects pageSize exceeding the maximum (400)', async () => {
+    const res = await request(app).get('/books').query({ pageSize: 51 });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'Invalid pagination' });
+  });
+
+  it('rejects a non-numeric page value (400)', async () => {
+    const res = await request(app).get('/books').query({ page: 'abc' });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'Invalid pagination' });
   });
 });
 

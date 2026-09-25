@@ -2,6 +2,7 @@ const request = require('supertest');
 const app = require('../src/app');
 const bookService = require('../src/services/bookService');
 const memberService = require('../src/services/memberService');
+const loanService = require('../src/services/loanService');
 
 function makeMember(overrides = {}) {
   return memberService.createMember({
@@ -17,7 +18,7 @@ function makeLibrarian(overrides = {}) {
 }
 
 describe('POST /loans', () => {
-  it('creates an active loan and decrements availableCopies, returning only the id', async () => {
+  it('creates an active loan and decrements availableCopies, returning the id and dueDate', async () => {
     const member = makeMember();
     const book = await request(app).post('/books').send({
       title: 'Loanable Book',
@@ -33,11 +34,36 @@ describe('POST /loans', () => {
       .send({ memberId: member.id, bookId: book.body.id });
 
     expect(res.status).toBe(201);
-    expect(Object.keys(res.body)).toEqual(['id']);
+    expect(Object.keys(res.body).sort()).toEqual(['dueDate', 'id']);
     expect(typeof res.body.id).toBe('number');
 
     const updatedBook = bookService.getBookById(book.body.id);
     expect(updatedBook.availableCopies).toBe(2);
+  });
+
+  it('sets dueDate to exactly 14 days after borrowedAt', async () => {
+    const member = makeMember();
+    const book = await request(app).post('/books').send({
+      title: 'Due Date Book',
+      author: 'Author',
+      isbn: 'ISBN-LOAN-DUEDATE',
+      totalCopies: 1,
+    });
+    expect(book.status).toBe(201);
+
+    const res = await request(app)
+      .post('/loans')
+      .set('x-member-id', String(member.id))
+      .send({ memberId: member.id, bookId: book.body.id });
+    expect(res.status).toBe(201);
+
+    const storedLoan = loanService.getLoanById(res.body.id);
+    expect(storedLoan).toBeDefined();
+    expect(storedLoan.dueDate).toBe(res.body.dueDate);
+
+    const borrowedAtMs = new Date(storedLoan.borrowedAt).getTime();
+    const dueDateMs = new Date(storedLoan.dueDate).getTime();
+    expect(dueDateMs - borrowedAtMs).toBe(14 * 24 * 60 * 60 * 1000);
   });
 
   it('rejects borrowing when no copies are available (400)', async () => {

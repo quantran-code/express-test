@@ -9,7 +9,16 @@ router.use(authenticate);
 router.post('/', (req, res, next) => {
   try {
     const loan = loanService.createLoan(req.body);
-    res.status(201).json({ id: loan.id });
+    res.status(201).json({ id: loan.id, dueDate: loan.dueDate });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/overdue', (req, res, next) => {
+  try {
+    const overdueLoans = loanService.listOverdueLoans();
+    res.status(200).json(overdueLoans);
   } catch (err) {
     next(err);
   }

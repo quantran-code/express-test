@@ -14,9 +14,13 @@ router.post('/', (req, res, next) => {
 
 router.get('/', (req, res, next) => {
   try {
-    const books = bookService.listBooks();
-    res.status(200).json(books);
+    const { q, page, pageSize } = req.query;
+    const result = bookService.listBooks({ q, page, pageSize });
+    res.status(200).json(result);
   } catch (err) {
+    if (err.status === 400) {
+      return res.status(400).json({ error: 'Invalid pagination' });
+    }
     next(err);
   }
 });

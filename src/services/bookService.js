@@ -55,8 +55,51 @@ function createBook(data) {
   return book;
 }
 
-function listBooks() {
-  return books;
+function listBooks(query) {
+  const { q, page, pageSize } = query || {};
+
+  let pageNum = 1;
+  if (page !== undefined) {
+    const parsedPage = Number(page);
+    if (!Number.isInteger(parsedPage) || parsedPage < 1 || String(page).trim() === '') {
+      throw createError('Invalid pagination', 400);
+    }
+    pageNum = parsedPage;
+  }
+
+  let pageSizeNum = 10;
+  if (pageSize !== undefined) {
+    const parsedPageSize = Number(pageSize);
+    if (
+      !Number.isInteger(parsedPageSize) ||
+      parsedPageSize < 1 ||
+      parsedPageSize > 50 ||
+      String(pageSize).trim() === ''
+    ) {
+      throw createError('Invalid pagination', 400);
+    }
+    pageSizeNum = parsedPageSize;
+  }
+
+  let filtered = books;
+  if (isNonEmptyString(q)) {
+    const needle = q.trim().toLowerCase();
+    filtered = books.filter(
+      (book) =>
+        book.title.toLowerCase().includes(needle) || book.author.toLowerCase().includes(needle)
+    );
+  }
+
+  const total = filtered.length;
+  const start = (pageNum - 1) * pageSizeNum;
+  const data = filtered.slice(start, start + pageSizeNum);
+
+  return {
+    data,
+    page: pageNum,
+    pageSize: pageSizeNum,
+    total,
+  };
 }
 
 function getBookById(id) {

@@ -1,10 +1,11 @@
 const bookService = require('./bookService');
 const memberService = require('./memberService');
 const {
-  getLoanById,
+  getLoanById: getLoanByIdFromStorage,
   getLoansByMemberId: getLoansByMemberIdFromStorage,
   getActiveLoanForMemberAndBook,
   createLoanRecord,
+  getAllLoans,
 } = require('../storage/loans');
 
 const LOAN_PERIOD_DAYS = 14;
@@ -55,7 +56,7 @@ function createLoan(data) {
 }
 
 function returnLoan(id) {
-  const loan = getLoanById(id);
+  const loan = getLoanByIdFromStorage(id);
   if (!loan) {
     throw createError('Loan not found', 404);
   }
@@ -79,8 +80,21 @@ function getLoansByMemberId(memberId) {
   return getLoansByMemberIdFromStorage(memberId);
 }
 
+function getLoanById(id) {
+  return getLoanByIdFromStorage(id);
+}
+
+function listOverdueLoans() {
+  const now = Date.now();
+  return getAllLoans().filter(
+    (loan) => loan.status !== 'returned' && new Date(loan.dueDate).getTime() < now
+  );
+}
+
 module.exports = {
   createLoan,
   returnLoan,
   getLoansByMemberId,
+  getLoanById,
+  listOverdueLoans,
 };
