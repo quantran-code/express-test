@@ -1,34 +1,39 @@
 const express = require('express');
-const { createBook, getAllBooks, getBookById, updateBook, deleteBook } = require('../services/bookService');
+const bookService = require('../services/bookService');
 
 const router = express.Router();
 
 router.post('/', (req, res, next) => {
   try {
-    const created = createBook(req.body);
-    res.status(201).json(created);
+    const book = bookService.createBook(req.body);
+    res.status(201).json(book);
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/', (req, res) => {
-  res.status(200).json(getAllBooks());
+router.get('/', (req, res, next) => {
+  try {
+    const books = bookService.listBooks();
+    res.status(200).json(books);
+  } catch (err) {
+    next(err);
+  }
 });
 
-router.get('/:id', (req, res) => {
-  const book = getBookById(req.params.id);
-  if (!book) {
-    return res.status(404).json({ error: 'Book not found' });
+router.get('/:id', (req, res, next) => {
+  try {
+    const book = bookService.getBook(Number(req.params.id));
+    res.status(200).json(book);
+  } catch (err) {
+    next(err);
   }
-
-  res.status(200).json(book);
 });
 
 router.patch('/:id', (req, res, next) => {
   try {
-    const updated = updateBook(req.params.id, req.body);
-    res.status(200).json(updated);
+    const book = bookService.updateBook(Number(req.params.id), req.body);
+    res.status(200).json(book);
   } catch (err) {
     next(err);
   }
@@ -36,7 +41,7 @@ router.patch('/:id', (req, res, next) => {
 
 router.delete('/:id', (req, res, next) => {
   try {
-    deleteBook(req.params.id);
+    bookService.deleteBook(Number(req.params.id));
     res.status(204).send();
   } catch (err) {
     next(err);

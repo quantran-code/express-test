@@ -1,17 +1,23 @@
-let books = [];
+const {
+  getAllBooks,
+  getBookById,
+  findBookByIsbn,
+  createBookRecord,
+  deleteBookRecord,
+} = require('../storage/books');
+
+function createError(message, status) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
 function isPositiveInteger(value) {
-  return Number.isInteger(value) && value > 0;
-}
-
-function createError(message, status) {
-  const err = new Error(message);
-  err.status = status;
-  return err;
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
 function createBook(data) {
@@ -33,41 +39,34 @@ function createBook(data) {
     throw createError('totalCopies must be an integer greater than 0', 400);
   }
 
-  const existing = books.find((b) => b.isbn === isbn);
-  if (existing) {
-    throw createError('isbn already exists', 409);
+  if (findBookByIsbn(isbn)) {
+    throw createError('ISBN already exists', 409);
   }
 
-  const book = {
-    id: String(Date.now() + Math.random()),
+  return createBookRecord({
     title: title.trim(),
     author: author.trim(),
     isbn: isbn.trim(),
     totalCopies,
-    availableCopies: totalCopies,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-
-  books.push(book);
-  return book;
+  });
 }
 
-function getAllBooks() {
-  return books;
+function listBooks() {
+  return getAllBooks();
 }
 
-function getBookById(id) {
-  return books.find((b) => b.id === id);
-}
-
-function updateBook(id, data) {
+function getBook(id) {
   const book = getBookById(id);
   if (!book) {
     throw createError('Book not found', 404);
   }
+  return book;
+}
 
-  const { title, author, totalCopies } = data || {};
+function updateBook(id, data) {
+  const book = getBook(id);
+
+  const { title, author, isbn, totalCopies } = data || {};
 
   if (title !== undefined) {
     if (!isNonEmptyString(title)) {
@@ -83,6 +82,16 @@ function updateBook(id, data) {
     book.author = author.trim();
   }
 
+  if (isbn !== undefined) {
+    if (!isNonEmptyString(isbn)) {
+      throw createError('isbn must be a non-empty string', 400);
+    }
+    if (findBookByIsbn(isbn, book.id)) {
+      throw createError('ISBN already exists', 409);
+    }
+    book.isbn = isbn.trim();
+  }
+
   if (totalCopies !== undefined) {
     if (!isPositiveInteger(totalCopies)) {
       throw createError('totalCopies must be an integer greater than 0', 400);
@@ -95,33 +104,28 @@ function updateBook(id, data) {
       throw createError('totalCopies cannot be less than the number of copies currently on loan', 400);
     }
 
-    // keep within invariants: if onLoan is computed correctly, availableCopies will never exceed totalCopies
     book.totalCopies = totalCopies;
     book.availableCopies = newAvailableCopies;
   }
 
-  book.updatedAt = new Date().toISOString();
   return book;
 }
 
 function deleteBook(id) {
-  const book = getBookById(id);
-  if (!book) {
-    throw createError('Book not found', 404);
-  }
+  const book = getBook(id);
 
-  if (book.availableCopies !== book.totalCopies) {
+  if (book.availableCopies < book.totalCopies) {
     throw createError('Cannot delete a book while copies are on loan', 409);
   }
 
-  books = books.filter((b) => b.id !== id);
-  return true;
+  deleteBookRecord(id);
 }
 
 module.exports = {
+  createError,
   createBook,
-  getAllBooks,
-  getBookById,
+  listBooks,
+  getBook,
   updateBook,
   deleteBook,
 };

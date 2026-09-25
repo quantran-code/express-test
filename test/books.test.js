@@ -1,187 +1,232 @@
 const request = require('supertest');
 const app = require('../src/app');
-const { getBookById } = require('../src/services/bookService');
+const { getBookById } = require('../src/storage/books');
 
-describe('Books API', () => {
-  describe('POST /books', () => {
-    it('creates a book with availableCopies === totalCopies', async () => {
-      const res = await request(app).post('/books').send({
-        title: 'Test Book',
-        author: 'Test Author',
-        isbn: 'TESTISBN',
-        totalCopies: 5,
-      });
+function validBookPayload(overrides = {}) {
+  return {
+    title: 'Clean Code',
+    author: 'Robert C. Martin',
+    isbn: `ISBN-${Math.random().toString(36).slice(2)}`,
+    totalCopies: 3,
+    ...overrides,
+  };
+}
 
-      expect(res.status).toBe(201);
-      expect(res.body.title).toBe('Test Book');
-      expect(res.body.author).toBe('Test Author');
-      expect(res.body.isbn).toBe('TESTISBN');
-      expect(res.body.totalCopies).toBe(5);
-      expect(res.body.availableCopies).toBe(5);
+describe('POST /books', () => {
+  it('creates a book with valid data and sets availableCopies = totalCopies (201)', async () => {
+    const payload = validBookPayload();
+    const res = await request(app).post('/books').send(payload);
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      title: payload.title,
+      author: payload.author,
+      isbn: payload.isbn,
+      totalCopies: payload.totalCopies,
+      availableCopies: payload.totalCopies,
+    });
+    expect(res.body.id).toBeDefined();
+  });
+
+  it('rejects missing title (400)', async () => {
+    const payload = validBookPayload();
+    delete payload.title;
+    const res = await request(app).post('/books').send(payload);
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('rejects empty string author (400)', async () => {
+    const payload = validBookPayload({ author: '   ' });
+    const res = await request(app).post('/books').send(payload);
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('rejects missing isbn (400)', async () => {
+    const payload = validBookPayload();
+    delete payload.isbn;
+    const res = await request(app).post('/books').send(payload);
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('rejects totalCopies provided as a string (400)', async () => {
+    const payload = validBookPayload({ totalCopies: '3' });
+    const res = await request(app).post('/books').send(payload);
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('rejects totalCopies of 0 (400)', async () => {
+    const payload = validBookPayload({ totalCopies: 0 });
+    const res = await request(app).post('/books').send(payload);
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('rejects negative totalCopies (400)', async () => {
+    const payload = validBookPayload({ totalCopies: -2 });
+    const res = await request(app).post('/books').send(payload);
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('rejects missing totalCopies (400)', async () => {
+    const payload = validBookPayload();
+    delete payload.totalCopies;
+    const res = await request(app).post('/books').send(payload);
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('rejects duplicate isbn (409)', async () => {
+    const payload = validBookPayload();
+    const first = await request(app).post('/books').send(payload);
+    expect(first.status).toBe(201);
+
+    const second = await request(app).post('/books').send(validBookPayload({ isbn: payload.isbn }));
+    expect(second.status).toBe(409);
+    expect(second.body).toEqual({ error: 'ISBN already exists' });
+  });
+});
+
+describe('GET /books', () => {
+  it('returns 200 with an array of books', async () => {
+    await request(app).post('/books').send(validBookPayload());
+
+    const res = await request(app).get('/books');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThan(0);
+  });
+});
+
+describe('GET /books/:id', () => {
+  it('returns 200 with the book for a known id', async () => {
+    const created = await request(app).post('/books').send(validBookPayload());
+    expect(created.status).toBe(201);
+
+    const res = await request(app).get(`/books/${created.body.id}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: created.body.id, title: created.body.title });
+  });
+
+  it('returns 404 for an unknown id', async () => {
+    const res = await request(app).get('/books/999999');
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'Book not found' });
+  });
+});
+
+describe('PATCH /books/:id', () => {
+  it('updates title/author/totalCopies (200) and recomputes availableCopies', async () => {
+    const created = await request(app).post('/books').send(validBookPayload({ totalCopies: 5 }));
+    expect(created.status).toBe(201);
+
+    const res = await request(app).patch(`/books/${created.body.id}`).send({
+      title: 'Updated Title',
+      author: 'Updated Author',
+      totalCopies: 10,
     });
 
-    it('rejects missing/invalid title/author/isbn/totalCopies with 400', async () => {
-      const res1 = await request(app).post('/books').send({
-        author: 'A',
-        isbn: 'ISBN',
-        totalCopies: 1,
-      });
-      expect(res1.status).toBe(400);
-
-      const res2 = await request(app).post('/books').send({
-        title: 'T',
-        isbn: 'ISBN',
-        totalCopies: 1,
-      });
-      expect(res2.status).toBe(400);
-
-      const res3 = await request(app).post('/books').send({
-        title: 'T',
-        author: 'A',
-        totalCopies: 1,
-      });
-      expect(res3.status).toBe(400);
-
-      const res4 = await request(app).post('/books').send({
-        title: 'T',
-        author: 'A',
-        isbn: 'ISBN',
-        totalCopies: 0,
-      });
-      expect(res4.status).toBe(400);
-    });
-
-    it('rejects duplicate isbn values with 409', async () => {
-      const first = await request(app).post('/books').send({
-        title: 'First',
-        author: 'A',
-        isbn: 'DUPISBN',
-        totalCopies: 2,
-      });
-      expect(first.status).toBe(201);
-
-      const second = await request(app).post('/books').send({
-        title: 'Second',
-        author: 'B',
-        isbn: 'DUPISBN',
-        totalCopies: 3,
-      });
-      expect(second.status).toBe(409);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      id: created.body.id,
+      title: 'Updated Title',
+      author: 'Updated Author',
+      totalCopies: 10,
+      availableCopies: 10,
     });
   });
 
-  describe('GET /books', () => {
-    it('lists all books', async () => {
-      await request(app).post('/books').send({
-        title: 'List1',
-        author: 'L1',
-        isbn: 'LISTISBN1',
-        totalCopies: 1,
-      });
+  it('allows partial update of a single field', async () => {
+    const created = await request(app).post('/books').send(validBookPayload());
+    expect(created.status).toBe(201);
 
-      const res = await request(app).get('/books');
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
-    });
+    const res = await request(app).patch(`/books/${created.body.id}`).send({ title: 'Only Title Changed' });
+    expect(res.status).toBe(200);
+    expect(res.body.title).toBe('Only Title Changed');
+    expect(res.body.author).toBe(created.body.author);
   });
 
-  describe('GET /books/:id', () => {
-    it('returns a book for an existing id and 404 for unknown id', async () => {
-      const created = await request(app).post('/books').send({
-        title: 'GetMe',
-        author: 'G',
-        isbn: 'GETISBN',
-        totalCopies: 2,
-      });
-      expect(created.status).toBe(201);
+  it('ignores user-supplied availableCopies', async () => {
+    const created = await request(app).post('/books').send(validBookPayload({ totalCopies: 4 }));
+    expect(created.status).toBe(201);
 
-      const getRes = await request(app).get(`/books/${created.body.id}`);
-      expect(getRes.status).toBe(200);
-      expect(getRes.body.id).toBe(created.body.id);
-
-      const missingRes = await request(app).get('/books/unknown');
-      expect(missingRes.status).toBe(404);
-    });
+    const res = await request(app).patch(`/books/${created.body.id}`).send({ availableCopies: 999 });
+    expect(res.status).toBe(200);
+    expect(res.body.availableCopies).toBe(4);
   });
 
-  describe('PATCH /books/:id', () => {
-    it('updates title/author/totalCopies', async () => {
-      const created = await request(app).post('/books').send({
-        title: 'PatchMe',
-        author: 'P',
-        isbn: 'PATCHISBN',
-        totalCopies: 4,
-      });
+  it('rejects invalid totalCopies type (400)', async () => {
+    const created = await request(app).post('/books').send(validBookPayload());
+    expect(created.status).toBe(201);
 
-      const res = await request(app).patch(`/books/${created.body.id}`).send({
-        title: 'Patched Title',
-        author: 'Patched Author',
-        totalCopies: 3,
-      });
-
-      expect(res.status).toBe(200);
-      expect(res.body.title).toBe('Patched Title');
-      expect(res.body.author).toBe('Patched Author');
-      expect(res.body.totalCopies).toBe(3);
-      expect(res.body.availableCopies).toBe(3);
-    });
-
-    it('rejects an update that would make availableCopies negative (400)', async () => {
-      const created = await request(app).post('/books').send({
-        title: 'Negative',
-        author: 'N',
-        isbn: 'NEGISBN',
-        totalCopies: 2,
-      });
-
-      // Force an on-loan scenario by mutating the in-memory book.
-      const live = getBookById(created.body.id);
-      expect(live.availableCopies).toBe(2);
-      live.availableCopies = 0; // all copies on loan
-
-      const res = await request(app).patch(`/books/${created.body.id}`).send({
-        totalCopies: 1,
-      });
-
-      expect(res.status).toBe(400);
-    });
+    const res = await request(app).patch(`/books/${created.body.id}`).send({ totalCopies: '5' });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
   });
 
-  describe('DELETE /books/:id', () => {
-    it('returns 204 when no copies are on loan and 404 when missing', async () => {
-      const created = await request(app).post('/books').send({
-        title: 'Delete Success',
-        author: 'Del',
-        isbn: 'DELISBN',
-        totalCopies: 2,
-      });
-      expect(created.status).toBe(201);
+  it('rejects totalCopies that would make availableCopies negative (400) when copies are on loan', async () => {
+    const created = await request(app).post('/books').send(validBookPayload({ totalCopies: 5 }));
+    expect(created.status).toBe(201);
 
-      const delRes = await request(app).delete(`/books/${created.body.id}`);
-      expect(delRes.status).toBe(204);
+    // Simulate 3 copies on loan by directly mutating the live stored record.
+    const liveBook = getBookById(created.body.id);
+    liveBook.availableCopies = 2; // onLoan = totalCopies(5) - availableCopies(2) = 3
 
-      const getRes = await request(app).get(`/books/${created.body.id}`);
-      expect(getRes.status).toBe(404);
+    const res = await request(app).patch(`/books/${created.body.id}`).send({ totalCopies: 2 });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('error');
+  });
 
-      const missingRes = await request(app).delete('/books/unknown');
-      expect(missingRes.status).toBe(404);
-    });
+  it('rejects isbn collision with another existing book (409)', async () => {
+    const first = await request(app).post('/books').send(validBookPayload());
+    expect(first.status).toBe(201);
+    const second = await request(app).post('/books').send(validBookPayload());
+    expect(second.status).toBe(201);
 
-    it('rejects deletion when copies are on loan (409) by simulating via direct mutation', async () => {
-      const created = await request(app).post('/books').send({
-        title: 'OnLoan',
-        author: 'O',
-        isbn: 'ONLOANISBN',
-        totalCopies: 2,
-      });
-      expect(created.status).toBe(201);
+    const res = await request(app).patch(`/books/${second.body.id}`).send({ isbn: first.body.isbn });
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ error: 'ISBN already exists' });
+  });
 
-      const live = getBookById(created.body.id);
-      live.availableCopies = 1;
+  it('returns 404 for an unknown id', async () => {
+    const res = await request(app).patch('/books/999999').send({ title: 'X' });
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'Book not found' });
+  });
+});
 
-      const delRes = await request(app).delete(`/books/${created.body.id}`);
-      expect(delRes.status).toBe(409);
-    });
+describe('DELETE /books/:id', () => {
+  it('deletes a book with no copies on loan (204)', async () => {
+    const created = await request(app).post('/books').send(validBookPayload());
+    expect(created.status).toBe(201);
+
+    const res = await request(app).delete(`/books/${created.body.id}`);
+    expect(res.status).toBe(204);
+    expect(res.body).toEqual({});
+
+    const getRes = await request(app).get(`/books/${created.body.id}`);
+    expect(getRes.status).toBe(404);
+  });
+
+  it('rejects deletion when copies are on loan (409)', async () => {
+    const created = await request(app).post('/books').send(validBookPayload({ totalCopies: 3 }));
+    expect(created.status).toBe(201);
+
+    const liveBook = getBookById(created.body.id);
+    liveBook.availableCopies = 1; // onLoan = 2
+
+    const res = await request(app).delete(`/books/${created.body.id}`);
+    expect(res.status).toBe(409);
+    expect(res.body).toHaveProperty('error');
+  });
+
+  it('returns 404 for an unknown id', async () => {
+    const res = await request(app).delete('/books/999999');
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'Book not found' });
   });
 });
