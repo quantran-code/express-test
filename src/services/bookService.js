@@ -1,10 +1,5 @@
-const {
-  getAllBooks,
-  getBookById,
-  findBookByIsbn,
-  createBookRecord,
-  deleteBookRecord,
-} = require('../storage/books');
+let books = [];
+let nextId = 1;
 
 function createError(message, status) {
   const err = new Error(message);
@@ -39,34 +34,45 @@ function createBook(data) {
     throw createError('totalCopies must be an integer greater than 0', 400);
   }
 
-  if (findBookByIsbn(isbn)) {
-    throw createError('ISBN already exists', 409);
+  const trimmedIsbn = isbn.trim();
+  const duplicate = books.find((book) => book.isbn === trimmedIsbn);
+  if (duplicate) {
+    throw createError('isbn must be unique', 400);
   }
 
-  return createBookRecord({
+  const book = {
+    id: nextId,
     title: title.trim(),
     author: author.trim(),
-    isbn: isbn.trim(),
+    isbn: trimmedIsbn,
     totalCopies,
-  });
+    availableCopies: totalCopies,
+  };
+
+  nextId += 1;
+  books.push(book);
+
+  return book;
 }
 
 function listBooks() {
-  return getAllBooks();
+  return books;
 }
 
-function getBook(id) {
+function getBookById(id) {
+  // eslint-disable-next-line eqeqeq
+  return books.find((book) => book.id == id);
+}
+
+function updateBook(id, data) {
   const book = getBookById(id);
   if (!book) {
     throw createError('Book not found', 404);
   }
-  return book;
-}
 
-function updateBook(id, data) {
-  const book = getBook(id);
+  const { title, author, totalCopies } = data || {};
 
-  const { title, author, isbn, totalCopies } = data || {};
+  // ignore any user-supplied availableCopies
 
   if (title !== undefined) {
     if (!isNonEmptyString(title)) {
@@ -80,16 +86,6 @@ function updateBook(id, data) {
       throw createError('author must be a non-empty string', 400);
     }
     book.author = author.trim();
-  }
-
-  if (isbn !== undefined) {
-    if (!isNonEmptyString(isbn)) {
-      throw createError('isbn must be a non-empty string', 400);
-    }
-    if (findBookByIsbn(isbn, book.id)) {
-      throw createError('ISBN already exists', 409);
-    }
-    book.isbn = isbn.trim();
   }
 
   if (totalCopies !== undefined) {
@@ -112,20 +108,23 @@ function updateBook(id, data) {
 }
 
 function deleteBook(id) {
-  const book = getBook(id);
+  const book = getBookById(id);
+  if (!book) {
+    throw createError('Book not found', 404);
+  }
 
-  if (book.availableCopies < book.totalCopies) {
+  const onLoan = book.totalCopies - book.availableCopies;
+  if (onLoan > 0) {
     throw createError('Cannot delete a book while copies are on loan', 409);
   }
 
-  deleteBookRecord(id);
+  books = books.filter((b) => b.id !== book.id);
 }
 
 module.exports = {
-  createError,
   createBook,
   listBooks,
-  getBook,
+  getBookById,
   updateBook,
   deleteBook,
 };
