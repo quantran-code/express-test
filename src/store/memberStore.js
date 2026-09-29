@@ -7,8 +7,10 @@ const returnCopy = bookStore.returnCopy;
 let nextId = 1;
 
 // In-memory storage for members
-// Member shape (internal): { id, name, loans: Set<bookId> }
+// Member shape (internal): { id, name, loans: Map<bookId, { borrowedAt: Date, dueDate: Date }> }
 const membersById = new Map();
+
+const LOAN_PERIOD_DAYS = 14;
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -34,7 +36,7 @@ function createMember(input) {
   const member = {
     id,
     name: name.trim(),
-    loans: new Set(),
+    loans: new Map(),
   };
 
   membersById.set(id, member);
@@ -63,16 +65,21 @@ function borrowBook(memberId, bookId) {
   // Confirm book exists (and keep error codes consistent with bookStore)
   getBookById(bookId);
 
-  if (member.loans.has(String(bookId))) {
+  const bookIdStr = String(bookId);
+
+  if (member.loans.has(bookIdStr)) {
     throw new ApiError(409, 'Member already borrowed this book');
   }
 
+  const borrowedAt = new Date();
+  const dueDate = new Date(borrowedAt.getTime() + LOAN_PERIOD_DAYS * 24 * 60 * 60 * 1000);
+
   borrowCopy(bookId);
-  member.loans.add(String(bookId));
+  member.loans.set(bookIdStr, { borrowedAt, dueDate });
 
   return {
     memberId: String(memberId),
-    bookId: String(bookId),
+    bookId: bookIdStr,
     book: getBookById(bookId),
   };
 }
@@ -86,25 +93,58 @@ function returnBook(memberId, bookId) {
   // Confirm book exists (and keep error codes consistent with bookStore)
   getBookById(bookId);
 
-  if (!member.loans.has(String(bookId))) {
+  const bookIdStr = String(bookId);
+
+  if (!member.loans.has(bookIdStr)) {
     throw new ApiError(409, 'Member does not have this book on loan');
   }
 
   returnCopy(bookId);
-  member.loans.delete(String(bookId));
+  member.loans.delete(bookIdStr);
 
   return {
     memberId: String(memberId),
-    bookId: String(bookId),
+    bookId: bookIdStr,
     book: getBookById(bookId),
   };
 }
 
+function getLoansForMember(memberId, options) {
+  const member = membersById.get(String(memberId));
+  if (!member) {
+    throw new ApiError(404, 'Member not found');
+  }
+
+  const overdueOnly = options && options.overdue === true;
+  const now = new Date();
+
+  const loans = [];
+
+  for (const [bookId, loan] of member.loans.entries()) {
+    const isOverdue = now.getTime() > loan.dueDate.getTime();
+
+    if (overdueOnly && !isOverdue) {
+      continue;
+    }
+
+    loans.push({
+      bookId,
+      borrowedAt: loan.borrowedAt.toISOString(),
+      dueDate: loan.dueDate.toISOString(),
+      book: getBookById(bookId),
+    });
+  }
+
+  return loans;
+}
+
 module.exports = {
   ApiError,
+  LOAN_PERIOD_DAYS,
   createMember,
   getAllMembers,
   getMemberById,
   borrowBook,
   returnBook,
+  getLoansForMember,
 };

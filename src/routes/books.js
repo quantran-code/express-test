@@ -24,8 +24,13 @@ router.post('/', (req, res, next) => {
 
 router.get('/', (req, res, next) => {
   try {
-    const books = getAllBooks();
-    res.status(200).json(books);
+    const title = req.query.title;
+    const author = req.query.author;
+    const page = req.query.page !== undefined ? Number(req.query.page) : undefined;
+    const pageSize = req.query.pageSize !== undefined ? Number(req.query.pageSize) : undefined;
+
+    const result = getAllBooks({ title, author, page, pageSize });
+    res.status(200).json(result);
   } catch (err) {
     return next(err);
   }

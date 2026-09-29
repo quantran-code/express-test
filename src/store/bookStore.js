@@ -65,8 +65,57 @@ function createBook(input) {
   return serializeBook(book);
 }
 
-function getAllBooks() {
-  return Array.from(booksById.values()).map(serializeBook);
+function getAllBooks(filters) {
+  const {
+    title,
+    author,
+    page: rawPage,
+    pageSize: rawPageSize,
+  } = filters || {};
+
+  const titleQuery = typeof title === 'string' && title.trim().length > 0 ? title.trim().toLowerCase() : undefined;
+  const authorQuery = typeof author === 'string' && author.trim().length > 0 ? author.trim().toLowerCase() : undefined;
+
+  const page = rawPage === undefined ? 1 : rawPage;
+  const pageSize = rawPageSize === undefined ? 10 : rawPageSize;
+
+  const assertPositiveInteger = (value, fieldName) => {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+      throw new ApiError(400, `${fieldName} must be a positive integer`);
+    }
+  };
+
+  assertPositiveInteger(page, 'page');
+  assertPositiveInteger(pageSize, 'pageSize');
+
+  if (pageSize > 50) {
+    throw new ApiError(400, 'pageSize must not exceed 50');
+  }
+
+  const allBooks = Array.from(booksById.values());
+
+  const matching = allBooks.filter((book) => {
+    if (!titleQuery && !authorQuery) {
+      return true;
+    }
+
+    const matchesTitle = titleQuery ? book.title.toLowerCase().includes(titleQuery) : false;
+    const matchesAuthor = authorQuery ? book.author.toLowerCase().includes(authorQuery) : false;
+
+    // union semantics: title matches OR author matches
+    return matchesTitle || matchesAuthor;
+  });
+
+  const total = matching.length;
+  const startIndex = (page - 1) * pageSize;
+  const paged = matching.slice(startIndex, startIndex + pageSize);
+
+  return {
+    items: paged.map(serializeBook),
+    total,
+    page,
+    pageSize,
+  };
 }
 
 function getBookById(id) {

@@ -7,6 +7,7 @@ const getAllMembers = memberStore.getAllMembers;
 const getMemberById = memberStore.getMemberById;
 const borrowBook = memberStore.borrowBook;
 const returnBook = memberStore.returnBook;
+const getLoansForMember = memberStore.getLoansForMember;
 
 const router = express.Router();
 
@@ -59,6 +60,19 @@ router.post('/:id/return', (req, res, next) => {
   try {
     const result = returnBook(req.params.id, req.body.bookId);
     res.status(200).json(result);
+  } catch (err) {
+    if (err instanceof ApiError) {
+      return next(err);
+    }
+    return next(err);
+  }
+});
+
+router.get('/:id/loans', (req, res, next) => {
+  try {
+    const overdue = req.query.overdue === 'true';
+    const loans = getLoansForMember(req.params.id, { overdue });
+    res.status(200).json(loans);
   } catch (err) {
     if (err instanceof ApiError) {
       return next(err);

@@ -123,9 +123,176 @@ describe('Book catalog', () => {
 
       const res = await request(app).get('/books');
       expect(res.status).toBe(200);
-      const isbns = res.body.map((b) => b.isbn);
+      const isbns = res.body.items.map((b) => b.isbn);
       expect(isbns).toContain(isbn1);
       expect(isbns).toContain(isbn2);
+    });
+
+    it('supports title-only search with case-insensitive substring matching', async () => {
+      const isbn1 = `search-${Date.now()}-1`;
+      const isbn2 = `search-${Date.now()}-2`;
+
+      await request(app).post('/books').send({
+        title: 'The Hobbit',
+        author: 'J.R.R. Tolkien',
+        isbn: isbn1,
+        totalCopies: 1,
+      });
+      await request(app).post('/books').send({
+        title: 'Harry Potter',
+        author: 'J.K. Rowling',
+        isbn: isbn2,
+        totalCopies: 1,
+      });
+
+      const res = await request(app).get('/books?title=hob');
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(1);
+      expect(res.body.items).toHaveLength(1);
+      expect(res.body.items[0].isbn).toBe(isbn1);
+    });
+
+    it('supports author-only search with case-insensitive substring matching', async () => {
+      const isbn1 = `search-${Date.now()}-3`;
+      const isbn2 = `search-${Date.now()}-4`;
+
+      await request(app).post('/books').send({
+        title: 'Some Title A',
+        author: 'Leo Tolstoy',
+        isbn: isbn1,
+        totalCopies: 1,
+      });
+      await request(app).post('/books').send({
+        title: 'Some Title B',
+        author: 'Mark Twain',
+        isbn: isbn2,
+        totalCopies: 1,
+      });
+
+      const res = await request(app).get('/books?author=tolST');
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(1);
+      expect(res.body.items).toHaveLength(1);
+      expect(res.body.items[0].isbn).toBe(isbn1);
+    });
+
+    it('supports combined title+author search using union semantics (OR)', async () => {
+      const isbn1 = `search-${Date.now()}-5`;
+      const isbn2 = `search-${Date.now()}-6`;
+      const isbn3 = `search-${Date.now()}-7`;
+
+      await request(app).post('/books').send({
+        title: 'Alpha',
+        author: 'Author One',
+        isbn: isbn1,
+        totalCopies: 1,
+      });
+      await request(app).post('/books').send({
+        title: 'Beta',
+        author: 'Target Author',
+        isbn: isbn2,
+        totalCopies: 1,
+      });
+      await request(app).post('/books').send({
+        title: 'Gamma',
+        author: 'Other',
+        isbn: isbn3,
+        totalCopies: 1,
+      });
+
+      const res = await request(app).get('/books?title=alp&author=target');
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(2);
+      const isbns = res.body.items.map((b) => b.isbn);
+      expect(isbns).toContain(isbn1);
+      expect(isbns).toContain(isbn2);
+      expect(isbns).not.toContain(isbn3);
+    });
+
+    it('defaults pagination to page=1 and pageSize=10', async () => {
+      const created = [];
+      for (let i = 0; i < 3; i += 1) {
+        const isbn = `defaultpg-${Date.now()}-${i}`;
+        created.push(isbn);
+        await request(app).post('/books').send({
+          title: `Default Pg ${i}`,
+          author: 'Author',
+          isbn,
+          totalCopies: 1,
+        });
+      }
+
+      const res = await request(app).get('/books');
+      expect(res.status).toBe(200);
+      expect(res.body.page).toBe(1);
+      expect(res.body.pageSize).toBe(10);
+      expect(res.body.total).toBeGreaterThanOrEqual(3);
+      expect(res.body.items.length).toBe(3);
+      const isbns = res.body.items.map((b) => b.isbn);
+      created.forEach((isbn) => expect(isbns).toContain(isbn));
+    });
+
+    it('paginates results: page and pageSize select the requested slice while total reflects full match count', async () => {
+      const isbns = [];
+      for (let i = 0; i < 3; i += 1) {
+        const isbn = `pgslice-${Date.now()}-${i}`;
+        isbns.push(isbn);
+        await request(app).post('/books').send({
+          title: `Slice ${i}`,
+          author: 'Author',
+          isbn,
+          totalCopies: 1,
+        });
+      }
+
+      const res = await request(app).get('/books?title=slice&page=2&pageSize=1');
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(3);
+      expect(res.body.page).toBe(2);
+      expect(res.body.pageSize).toBe(1);
+      expect(res.body.items).toHaveLength(1);
+      expect(res.body.items[0].isbn).toBe(isbns[1]);
+    });
+
+    it('returns empty items when page is beyond range but total still reflects match count', async () => {
+      const isbn = `beyond-${Date.now()}`;
+      await request(app).post('/books').send({
+        title: 'Beyond',
+        author: 'Author',
+        isbn,
+        totalCopies: 1,
+      });
+
+      const res = await request(app).get('/books?title=beyond&page=2&pageSize=1');
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(1);
+      expect(res.body.items).toEqual([]);
+      expect(res.body.page).toBe(2);
+      expect(res.body.pageSize).toBe(1);
+    });
+
+    it('rejects invalid pagination input with 400', async () => {
+      const res1 = await request(app).get('/books?page=0');
+      expect(res1.status).toBe(400);
+      expect(res1.body).toEqual({ error: expect.any(String) });
+
+      const res2 = await request(app).get('/books?pageSize=0');
+      expect(res2.status).toBe(400);
+      expect(res2.body).toEqual({ error: expect.any(String) });
+
+      const res3 = await request(app).get('/books?page=abc');
+      expect(res3.status).toBe(400);
+      expect(res3.body).toEqual({ error: expect.any(String) });
+
+      const res4 = await request(app).get('/books?pageSize=abc');
+      expect(res4.status).toBe(400);
+      expect(res4.body).toEqual({ error: expect.any(String) });
+    });
+
+    it('rejects pageSize above enforced max with 400', async () => {
+      const res = await request(app).get('/books?pageSize=51');
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: expect.any(String) });
     });
   });
 
