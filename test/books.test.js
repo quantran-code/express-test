@@ -3,14 +3,46 @@ const app = require('../src/app');
 
 const bookStore = require('../src/store/bookStore');
 
+async function loginLibrarian() {
+  const res = await request(app).post('/auth/login').send({
+    email: 'librarian@example.com',
+    password: 'librarian-password',
+  });
+  return res.body.token;
+}
+
+async function loginMember() {
+  const name = `Member-${Date.now()}-${Math.random()}`;
+  const email = `member-${Date.now()}-${Math.random()}@example.com`;
+  const password = 'member-password';
+
+  const registerRes = await request(app).post('/auth/register').send({
+    name,
+    email,
+    password,
+  });
+  expect(registerRes.status).toBe(201);
+
+  const loginRes = await request(app).post('/auth/login').send({ email, password });
+  return loginRes.body.token;
+}
+
 describe('Book catalog', () => {
+  let librarianToken;
+  let memberToken;
+
+  beforeAll(async () => {
+    librarianToken = await loginLibrarian();
+    memberToken = await loginMember();
+  });
+
   beforeEach(() => {
     // The store is in-memory and persists across tests.
     // There is no public reset hook per the requirements, so we rely on unique ISBNs per test.
   });
 
   it('smoke: every book route responds', async () => {
-    const createRes = await request(app).post('/books').send({
+    const createRes = await request(app).post('/books').set('Authorization', `Bearer ${librarianToken}`).send({
       title: 'Smoke Title',
       author: 'Smoke Author',
       isbn: `smoke-${Date.now()}-a`,
@@ -18,27 +50,27 @@ describe('Book catalog', () => {
     });
     expect(createRes.status).toBe(201);
 
-    const listRes = await request(app).get('/books');
+    const listRes = await request(app).get('/books').set('Authorization', `Bearer ${librarianToken}`);
     expect(listRes.status).toBe(200);
 
     const id = createRes.body.id;
 
-    const getRes = await request(app).get(`/books/${id}`);
+    const getRes = await request(app).get(`/books/${id}`).set('Authorization', `Bearer ${librarianToken}`);
     expect(getRes.status).toBe(200);
 
-    const updateRes = await request(app).put(`/books/${id}`).send({
+    const updateRes = await request(app).put(`/books/${id}`).set('Authorization', `Bearer ${librarianToken}`).send({
       title: 'Smoke Title Updated',
       totalCopies: 4,
     });
     expect(updateRes.status).toBe(200);
 
-    const deleteRes = await request(app).delete(`/books/${id}`);
+    const deleteRes = await request(app).delete(`/books/${id}`).set('Authorization', `Bearer ${librarianToken}`);
     expect(deleteRes.status).toBe(204);
   });
 
   describe('POST /books', () => {
     it('creates a book and sets availableCopies=totalCopies', async () => {
-      const res = await request(app).post('/books').send({
+      const res = await request(app).post('/books').set('Authorization', `Bearer ${librarianToken}`).send({
         title: 'The Hobbit',
         author: 'J.R.R. Tolkien',
         isbn: `isbn-${Date.now()}-1`,
@@ -58,7 +90,7 @@ describe('Book catalog', () => {
     });
 
     it('rejects missing required fields', async () => {
-      const res = await request(app).post('/books').send({
+      const res = await request(app).post('/books').set('Authorization', `Bearer ${librarianToken}`).send({
         title: '',
         author: 'Author',
         isbn: 'isbn-missing-title',
@@ -91,7 +123,7 @@ describe('Book catalog', () => {
     });
 
     it('rejects totalCopies <= 0', async () => {
-      const res = await request(app).post('/books').send({
+      const res = await request(app).post('/books').set('Authorization', `Bearer ${librarianToken}`).send({
         title: 'Bad Copies',
         author: 'Author',
         isbn: `bad-${Date.now()}-copies`,
@@ -145,7 +177,7 @@ describe('Book catalog', () => {
         totalCopies: 1,
       });
 
-      const res = await request(app).get('/books?title=hob');
+      const res = await request(app).get('/books?title=hob').set('Authorization', `Bearer ${librarianToken}`);
       expect(res.status).toBe(200);
       expect(res.body.total).toBe(1);
       expect(res.body.items).toHaveLength(1);
@@ -169,7 +201,7 @@ describe('Book catalog', () => {
         totalCopies: 1,
       });
 
-      const res = await request(app).get('/books?author=tolST');
+      const res = await request(app).get('/books?author=tolST').set('Authorization', `Bearer ${librarianToken}`);
       expect(res.status).toBe(200);
       expect(res.body.total).toBe(1);
       expect(res.body.items).toHaveLength(1);

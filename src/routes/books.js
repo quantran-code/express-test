@@ -8,9 +8,12 @@ const getBookById = bookStore.getBookById;
 const updateBook = bookStore.updateBook;
 const deleteBook = bookStore.deleteBook;
 
+const auth = require('../middleware/auth');
+const requireRole = auth.requireRole;
+
 const router = express.Router();
 
-router.post('/', (req, res, next) => {
+router.post('/', requireRole('librarian'), (req, res, next) => {
   try {
     const book = createBook(req.body);
     res.status(201).json(book);
@@ -48,7 +51,7 @@ router.get('/:id', (req, res, next) => {
   }
 });
 
-router.put('/:id', (req, res, next) => {
+router.put('/:id', requireRole('librarian'), (req, res, next) => {
   try {
     const book = updateBook(req.params.id, req.body);
     res.status(200).json(book);
@@ -60,7 +63,7 @@ router.put('/:id', (req, res, next) => {
   }
 });
 
-router.delete('/:id', (req, res, next) => {
+router.delete('/:id', requireRole('librarian'), (req, res, next) => {
   try {
     deleteBook(req.params.id);
     res.status(204).send();
