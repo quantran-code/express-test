@@ -149,6 +149,34 @@ function setOnLoanCopies(id, count) {
   book.availableCopies = book.totalCopies - book.onLoanCopies;
 }
 
+function borrowCopy(bookId) {
+  const book = booksById.get(String(bookId));
+  if (!book) {
+    throw new ApiError(404, 'Book not found');
+  }
+
+  if (book.availableCopies <= 0) {
+    throw new ApiError(409, 'No available copies');
+  }
+
+  book.onLoanCopies += 1;
+  book.availableCopies -= 1;
+}
+
+function returnCopy(bookId) {
+  const book = booksById.get(String(bookId));
+  if (!book) {
+    throw new ApiError(404, 'Book not found');
+  }
+
+  if (book.onLoanCopies <= 0) {
+    throw new ApiError(409, 'No copies on loan');
+  }
+
+  book.onLoanCopies -= 1;
+  book.availableCopies += 1;
+}
+
 module.exports = {
   ApiError,
   createBook,
@@ -157,4 +185,6 @@ module.exports = {
   updateBook,
   deleteBook,
   setOnLoanCopies,
+  borrowCopy,
+  returnCopy,
 };
