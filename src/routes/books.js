@@ -7,6 +7,10 @@ router.get('/', (req, res) => {
   res.status(200).json(bookService.listBooks());
 });
 
+router.get('/search', (req, res) => {
+  res.status(200).json(bookService.searchBooks(req.query));
+});
+
 router.get('/:id', (req, res) => {
   res.status(200).json(bookService.getBook(req.params.id));
 });

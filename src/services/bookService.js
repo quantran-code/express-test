@@ -1,6 +1,9 @@
 const HttpError = require('../errors/httpError');
 const bookRepository = require('../repositories/bookRepository');
 
+const DEFAULT_PAGE_SIZE = 10;
+const MAX_PAGE_SIZE = 100;
+
 /**
  * @param {number | string} id
  * @returns {number}
@@ -160,9 +163,76 @@ function deleteBook(id) {
   bookRepository.remove(bookId);
 }
 
+/**
+ * @param {{ page?: string | number, pageSize?: string | number }} query
+ * @returns {{ page: number, pageSize: number }}
+ */
+function parsePagination(query) {
+  const data = query || {};
+
+  const page = data.page === undefined ? 1 : Number(data.page);
+  const pageSize =
+    data.pageSize === undefined ? DEFAULT_PAGE_SIZE : Number(data.pageSize);
+
+  if (!Number.isInteger(page) || page < 1) {
+    throw new HttpError(
+      400,
+      'page must be an integer greater than or equal to 1',
+    );
+  }
+
+  if (!Number.isInteger(pageSize) || pageSize < 1) {
+    throw new HttpError(
+      400,
+      'pageSize must be an integer greater than or equal to 1',
+    );
+  }
+
+  if (pageSize > MAX_PAGE_SIZE) {
+    throw new HttpError(
+      400,
+      `pageSize must not be greater than ${MAX_PAGE_SIZE}`,
+    );
+  }
+
+  return { page, pageSize };
+}
+
+/**
+ * @param {{ q?: string, page?: string | number, pageSize?: string | number }} query
+ * @returns {{ data: import('../repositories/bookRepository').Book[], total: number }}
+ */
+function searchBooks(query) {
+  const data = query || {};
+  const { page, pageSize } = parsePagination(data);
+  const term = typeof data.q === 'string' ? data.q.trim().toLowerCase() : '';
+
+  const matches = bookRepository.findAll().filter((book) => {
+    if (term === '') {
+      return true;
+    }
+
+    return (
+      book.title.toLowerCase().includes(term) ||
+      book.author.toLowerCase().includes(term)
+    );
+  });
+
+  const start = (page - 1) * pageSize;
+
+  return {
+    data: matches.slice(start, start + pageSize),
+    total: matches.length,
+  };
+}
+
 module.exports = {
+  DEFAULT_PAGE_SIZE,
+  MAX_PAGE_SIZE,
+  parsePagination,
   createBook,
   listBooks,
+  searchBooks,
   getBook,
   updateBook,
   deleteBook,

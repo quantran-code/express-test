@@ -4,6 +4,34 @@ const memberRepository = require('../repositories/memberRepository');
 const loanRepository = require('../repositories/loanRepository');
 
 const MAX_ACTIVE_LOANS = 3;
+const LOAN_PERIOD_DAYS = 14;
+
+/**
+ * @param {string} borrowedAt
+ * @returns {string}
+ */
+function computeDueDate(borrowedAt) {
+  const dueAt =
+    Date.parse(borrowedAt) + LOAN_PERIOD_DAYS * 24 * 60 * 60 * 1000;
+
+  return new Date(dueAt).toISOString();
+}
+
+/**
+ * Strips the stored dueDate so existing loan payloads keep their shape.
+ *
+ * @param {import('../repositories/loanRepository').Loan} loan
+ * @returns {{ id: number, bookId: number, memberId: number, borrowedAt: string, returnedAt: string | null }}
+ */
+function toLoanResponse(loan) {
+  return {
+    id: loan.id,
+    bookId: loan.bookId,
+    memberId: loan.memberId,
+    borrowedAt: loan.borrowedAt,
+    returnedAt: loan.returnedAt,
+  };
+}
 
 /**
  * @param {number | string} id
@@ -42,7 +70,7 @@ function requireId(value, field, message) {
 
 /**
  * @param {object} payload
- * @returns {import('../repositories/loanRepository').Loan}
+ * @returns {{ id: number, bookId: number, memberId: number, borrowedAt: string, returnedAt: string | null }}
  */
 function borrowBook(payload) {
   const data = payload || {};
@@ -80,21 +108,24 @@ function borrowBook(payload) {
     );
   }
 
+  const borrowedAt = new Date().toISOString();
+
   const loan = loanRepository.create({
     bookId,
     memberId,
-    borrowedAt: new Date().toISOString(),
+    borrowedAt,
     returnedAt: null,
+    dueDate: computeDueDate(borrowedAt),
   });
 
   bookRepository.update(bookId, { availableCopies: book.availableCopies - 1 });
 
-  return loan;
+  return toLoanResponse(loan);
 }
 
 /**
  * @param {number | string} id
- * @returns {import('../repositories/loanRepository').Loan}
+ * @returns {{ id: number, bookId: number, memberId: number, borrowedAt: string, returnedAt: string | null }}
  */
 function returnLoan(id) {
   const loanId = parseId(id, 'Loan not found');
@@ -116,14 +147,16 @@ function returnLoan(id) {
     });
   }
 
-  return loanRepository.update(loanId, {
-    returnedAt: new Date().toISOString(),
-  });
+  return toLoanResponse(
+    loanRepository.update(loanId, {
+      returnedAt: new Date().toISOString(),
+    }),
+  );
 }
 
 /**
  * @param {number | string} memberId
- * @returns {import('../repositories/loanRepository').Loan[]}
+ * @returns {{ id: number, bookId: number, memberId: number, borrowedAt: string, returnedAt: string | null }[]}
  */
 function listActiveLoansForMember(memberId) {
   const parsedMemberId = parseId(memberId, 'Member not found');
@@ -133,13 +166,63 @@ function listActiveLoansForMember(memberId) {
     throw new HttpError(404, 'Member not found');
   }
 
-  return loanRepository.findActiveByMemberId(parsedMemberId);
+  const activeLoans = loanRepository.findActiveByMemberId(parsedMemberId);
+
+  return activeLoans.map(toLoanResponse);
+}
+
+/**
+ * @param {import('../repositories/loanRepository').Loan} loan
+ * @param {number} [now]
+ * @returns {boolean}
+ */
+function isOverdue(loan, now = Date.now()) {
+  if (loan.returnedAt !== null) {
+    return false;
+  }
+
+  return now > Date.parse(loan.dueDate);
+}
+
+/**
+ * @param {import('../repositories/loanRepository').Loan} loan
+ * @returns {{ id: number, bookId: number, memberId: number, borrowedAt: string, returnedAt: string | null, dueDate: string }}
+ */
+function toLoanWithDueDate(loan) {
+  return {
+    id: loan.id,
+    bookId: loan.bookId,
+    memberId: loan.memberId,
+    borrowedAt: loan.borrowedAt,
+    returnedAt: loan.returnedAt,
+    dueDate: loan.dueDate,
+  };
+}
+
+/**
+ * Overdue status is evaluated on every call so it always reflects the current moment.
+ *
+ * @returns {{ id: number, bookId: number, memberId: number, borrowedAt: string, returnedAt: string | null, dueDate: string }[]}
+ */
+function listOverdueLoans() {
+  const now = Date.now();
+
+  return loanRepository
+    .findAll()
+    .filter((loan) => isOverdue(loan, now))
+    .map(toLoanWithDueDate);
 }
 
 module.exports = {
   MAX_ACTIVE_LOANS,
+  LOAN_PERIOD_DAYS,
   parseId,
+  computeDueDate,
+  toLoanResponse,
+  isOverdue,
+  toLoanWithDueDate,
   borrowBook,
   returnLoan,
   listActiveLoansForMember,
+  listOverdueLoans,
 };

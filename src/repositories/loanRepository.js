@@ -5,13 +5,14 @@
  * @property {number} memberId
  * @property {string} borrowedAt
  * @property {string | null} returnedAt
+ * @property {string} dueDate
  */
 
 let loans = [];
 let nextId = 1;
 
 /**
- * @param {{ bookId: number, memberId: number, borrowedAt: string, returnedAt: string | null }} data
+ * @param {{ bookId: number, memberId: number, borrowedAt: string, returnedAt: string | null, dueDate: string }} data
  * @returns {Loan}
  */
 function create(data) {
@@ -21,6 +22,7 @@ function create(data) {
     memberId: data.memberId,
     borrowedAt: data.borrowedAt,
     returnedAt: data.returnedAt,
+    dueDate: data.dueDate,
   };
 
   nextId += 1;
