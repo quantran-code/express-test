@@ -1,8 +1,14 @@
 const app = require('../src/app');
 const bookRepository = require('../src/repositories/bookRepository');
+const { LIBRARIAN_EMAIL, LIBRARIAN_PASSWORD } = require('./helpers/auth');
 
 let server;
 let baseUrl;
+let accessToken;
+
+function authHeaders(extra) {
+  return { Authorization: `Bearer ${accessToken}`, ...extra };
+}
 
 beforeAll(async () => {
   bookRepository.reset();
@@ -12,6 +18,25 @@ beforeAll(async () => {
   });
 
   baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+  const loginRes = await fetch(`${baseUrl}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: LIBRARIAN_EMAIL,
+      password: LIBRARIAN_PASSWORD,
+    }),
+  });
+
+  const login = await loginRes.json();
+
+  if (loginRes.status !== 200 || typeof login.accessToken !== 'string') {
+    throw new Error(
+      `Could not sign in as the seeded librarian (status ${loginRes.status})`,
+    );
+  }
+
+  accessToken = login.accessToken;
 });
 
 afterAll(async () => {
@@ -47,7 +72,7 @@ describe('running server', () => {
   it('walks POST, GET list, GET by id, PATCH and DELETE /books end to end', async () => {
     const createRes = await fetch(`${baseUrl}/books`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
     });
 
@@ -63,20 +88,24 @@ describe('running server', () => {
       availableCopies: payload.totalCopies,
     });
 
-    const listRes = await fetch(`${baseUrl}/books`);
+    const listRes = await fetch(`${baseUrl}/books`, {
+      headers: authHeaders(),
+    });
     expect(listRes.status).toBe(200);
 
     const list = await listRes.json();
     expect(Array.isArray(list)).toBe(true);
     expect(list.map((book) => book.id)).toContain(created.id);
 
-    const getRes = await fetch(`${baseUrl}/books/${created.id}`);
+    const getRes = await fetch(`${baseUrl}/books/${created.id}`, {
+      headers: authHeaders(),
+    });
     expect(getRes.status).toBe(200);
     expect(await getRes.json()).toEqual(created);
 
     const patchRes = await fetch(`${baseUrl}/books/${created.id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ title: 'The Hobbit, Revised' }),
     });
 
@@ -89,11 +118,14 @@ describe('running server', () => {
 
     const deleteRes = await fetch(`${baseUrl}/books/${created.id}`, {
       method: 'DELETE',
+      headers: authHeaders(),
     });
 
     expect(deleteRes.status).toBe(204);
 
-    const afterDeleteRes = await fetch(`${baseUrl}/books/${created.id}`);
+    const afterDeleteRes = await fetch(`${baseUrl}/books/${created.id}`, {
+      headers: authHeaders(),
+    });
     expect(afterDeleteRes.status).toBe(404);
   });
 });

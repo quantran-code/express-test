@@ -1,8 +1,12 @@
-const request = require('supertest');
 const app = require('../src/app');
 const bookRepository = require('../src/repositories/bookRepository');
 const memberRepository = require('../src/repositories/memberRepository');
 const loanRepository = require('../src/repositories/loanRepository');
+const { authedRequest, signInLibrarian } = require('./helpers/auth');
+
+beforeAll(async () => {
+  await signInLibrarian(app);
+});
 
 // Flat loan shape the API contract promises: no other keys are allowed.
 const LOAN_KEYS = ['bookId', 'borrowedAt', 'id', 'memberId', 'returnedAt'];
@@ -13,7 +17,7 @@ let memberCounter = 0;
 async function seedBook(overrides = {}) {
   bookCounter += 1;
 
-  const res = await request(app)
+  const res = await authedRequest(app)
     .post('/books')
     .send({
       title: `Seeded Book ${bookCounter}`,
@@ -29,7 +33,7 @@ async function seedBook(overrides = {}) {
 async function seedMember(overrides = {}) {
   memberCounter += 1;
 
-  const res = await request(app)
+  const res = await authedRequest(app)
     .post('/members')
     .send({
       name: `Seeded Member ${memberCounter}`,
@@ -41,11 +45,11 @@ async function seedMember(overrides = {}) {
 }
 
 function borrow(bookId, memberId) {
-  return request(app).post('/loans').send({ bookId, memberId });
+  return authedRequest(app).post('/loans').send({ bookId, memberId });
 }
 
 function getBook(id) {
-  return request(app).get(`/books/${id}`);
+  return authedRequest(app).get(`/books/${id}`);
 }
 
 describe('Loans', () => {
@@ -96,7 +100,7 @@ describe('Loans', () => {
       const stored = await getBook(book.id);
       expect(stored.body.availableCopies).toBe(0);
 
-      const secondMemberLoans = await request(app).get(
+      const secondMemberLoans = await authedRequest(app).get(
         `/members/${secondMember.id}/loans`,
       );
       expect(secondMemberLoans.body).toEqual([]);
@@ -118,7 +122,7 @@ describe('Loans', () => {
       const stored = await getBook(book.id);
       expect(stored.body.availableCopies).toBe(1);
 
-      const active = await request(app).get(`/members/${member.id}/loans`);
+      const active = await authedRequest(app).get(`/members/${member.id}/loans`);
       expect(active.body).toHaveLength(1);
     });
 
@@ -145,7 +149,7 @@ describe('Loans', () => {
       const stored = await getBook(fourth.id);
       expect(stored.body.availableCopies).toBe(1);
 
-      const active = await request(app).get(`/members/${member.id}/loans`);
+      const active = await authedRequest(app).get(`/members/${member.id}/loans`);
       expect(active.body).toHaveLength(3);
     });
 
@@ -180,7 +184,7 @@ describe('Loans', () => {
       expect(loan.status).toBe(201);
       expect(loan.body.returnedAt).toBeNull();
 
-      const res = await request(app).post(`/loans/${loan.body.id}/return`);
+      const res = await authedRequest(app).post(`/loans/${loan.body.id}/return`);
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
@@ -203,7 +207,7 @@ describe('Loans', () => {
       const member = await seedMember();
       await borrow(book.id, member.id);
 
-      const res = await request(app).post('/loans/999/return');
+      const res = await authedRequest(app).post('/loans/999/return');
 
       expect(res.status).toBe(404);
       expect(typeof res.body.error).toBe('string');
@@ -216,10 +220,10 @@ describe('Loans', () => {
       const loan = await borrow(book.id, member.id);
       expect(loan.status).toBe(201);
 
-      const firstReturn = await request(app).post(`/loans/${loan.body.id}/return`);
+      const firstReturn = await authedRequest(app).post(`/loans/${loan.body.id}/return`);
       expect(firstReturn.status).toBe(200);
 
-      const res = await request(app).post(`/loans/${loan.body.id}/return`);
+      const res = await authedRequest(app).post(`/loans/${loan.body.id}/return`);
 
       expect(res.status).toBe(409);
       expect(typeof res.body.error).toBe('string');
@@ -247,7 +251,7 @@ describe('Loans', () => {
       expect(secondLoan.status).toBe(201);
       expect(otherLoan.status).toBe(201);
 
-      const res = await request(app).get(`/members/${member.id}/loans`);
+      const res = await authedRequest(app).get(`/members/${member.id}/loans`);
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveLength(2);
@@ -260,12 +264,12 @@ describe('Loans', () => {
         expect(Object.keys(loan).sort()).toEqual(LOAN_KEYS);
       }
 
-      const returned = await request(app).post(
+      const returned = await authedRequest(app).post(
         `/loans/${firstLoan.body.id}/return`,
       );
       expect(returned.status).toBe(200);
 
-      const afterReturn = await request(app).get(`/members/${member.id}/loans`);
+      const afterReturn = await authedRequest(app).get(`/members/${member.id}/loans`);
 
       expect(afterReturn.status).toBe(200);
       expect(afterReturn.body).toHaveLength(1);
@@ -276,7 +280,7 @@ describe('Loans', () => {
     it('returns 404 for an unknown member id', async () => {
       await seedMember();
 
-      const res = await request(app).get('/members/999/loans');
+      const res = await authedRequest(app).get('/members/999/loans');
 
       expect(res.status).toBe(404);
       expect(typeof res.body.error).toBe('string');
@@ -300,7 +304,7 @@ describe('Loans', () => {
           afterBorrow.body.totalCopies,
         );
 
-        const returned = await request(app).post(
+        const returned = await authedRequest(app).post(
           `/loans/${borrowed.body.id}/return`,
         );
         expect(returned.status).toBe(200);
@@ -323,7 +327,7 @@ describe('Loans', () => {
       const loan = await borrow(book.id, member.id);
       expect(loan.status).toBe(201);
 
-      const res = await request(app).delete(`/books/${book.id}`);
+      const res = await authedRequest(app).delete(`/books/${book.id}`);
 
       expect(res.status).toBe(409);
       expect(typeof res.body.error).toBe('string');

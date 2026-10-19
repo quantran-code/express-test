@@ -1,13 +1,17 @@
-const request = require('supertest');
 const app = require('../src/app');
 const bookRepository = require('../src/repositories/bookRepository');
+const { authedRequest, signInLibrarian } = require('./helpers/auth');
+
+beforeAll(async () => {
+  await signInLibrarian(app);
+});
 
 let bookCounter = 0;
 
 async function seedBook(overrides = {}) {
   bookCounter += 1;
 
-  const res = await request(app)
+  const res = await authedRequest(app)
     .post('/books')
     .send({
       title: `Seeded Book ${bookCounter}`,
@@ -21,7 +25,7 @@ async function seedBook(overrides = {}) {
 }
 
 function search(query) {
-  return request(app).get('/books/search').query(query);
+  return authedRequest(app).get('/books/search').query(query);
 }
 
 describe('GET /books/search', () => {
@@ -191,7 +195,7 @@ describe('GET /books', () => {
     const first = await seedBook({ title: 'The Hobbit' });
     const second = await seedBook({ title: 'Dune' });
 
-    const res = await request(app).get('/books');
+    const res = await authedRequest(app).get('/books');
 
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);

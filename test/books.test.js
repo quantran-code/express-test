@@ -1,6 +1,10 @@
-const request = require('supertest');
 const app = require('../src/app');
 const bookRepository = require('../src/repositories/bookRepository');
+const { authedRequest, signInLibrarian } = require('./helpers/auth');
+
+beforeAll(async () => {
+  await signInLibrarian(app);
+});
 
 const sampleBook = {
   title: 'The Hobbit',
@@ -17,7 +21,7 @@ const otherBook = {
 };
 
 function createBook(payload = sampleBook) {
-  return request(app).post('/books').send(payload);
+  return authedRequest(app).post('/books').send(payload);
 }
 
 describe('Books CRUD', () => {
@@ -47,7 +51,7 @@ describe('Books CRUD', () => {
       expect(res.body.totalCopies).toBe(sampleBook.totalCopies);
       expect(res.body.availableCopies).toBe(sampleBook.totalCopies);
 
-      const stored = await request(app).get(`/books/${res.body.id}`);
+      const stored = await authedRequest(app).get(`/books/${res.body.id}`);
       expect(stored.status).toBe(200);
       expect(stored.body.availableCopies).toBe(sampleBook.totalCopies);
     });
@@ -61,7 +65,7 @@ describe('Books CRUD', () => {
       expect(duplicate.status).toBe(409);
       expect(typeof duplicate.body.error).toBe('string');
 
-      const list = await request(app).get('/books');
+      const list = await authedRequest(app).get('/books');
       expect(list.body).toHaveLength(1);
     });
 
@@ -93,7 +97,7 @@ describe('Books CRUD', () => {
         expect(res.status).toBe(400);
         expect(typeof res.body.error).toBe('string');
 
-        const list = await request(app).get('/books');
+        const list = await authedRequest(app).get('/books');
         expect(list.body).toEqual([]);
       });
     }
@@ -104,7 +108,7 @@ describe('Books CRUD', () => {
       const first = await createBook();
       const second = await createBook(otherBook);
 
-      const res = await request(app).get('/books');
+      const res = await authedRequest(app).get('/books');
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveLength(2);
@@ -123,7 +127,7 @@ describe('Books CRUD', () => {
     it('returns 200 with the matching book', async () => {
       const created = await createBook();
 
-      const res = await request(app).get(`/books/${created.body.id}`);
+      const res = await authedRequest(app).get(`/books/${created.body.id}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual(created.body);
@@ -132,7 +136,7 @@ describe('Books CRUD', () => {
     it('returns 404 with an error body for an unknown id', async () => {
       await createBook();
 
-      const res = await request(app).get('/books/999');
+      const res = await authedRequest(app).get('/books/999');
 
       expect(res.status).toBe(404);
       expect(typeof res.body.error).toBe('string');
@@ -143,7 +147,7 @@ describe('Books CRUD', () => {
     it('updates only the supplied fields', async () => {
       const created = await createBook();
 
-      const res = await request(app)
+      const res = await authedRequest(app)
         .patch(`/books/${created.body.id}`)
         .send({ title: 'The Hobbit, Revised' });
 
@@ -158,7 +162,7 @@ describe('Books CRUD', () => {
     it('returns 404 for an unknown id', async () => {
       await createBook();
 
-      const res = await request(app).patch('/books/999').send({ title: 'Nope' });
+      const res = await authedRequest(app).patch('/books/999').send({ title: 'Nope' });
 
       expect(res.status).toBe(404);
       expect(typeof res.body.error).toBe('string');
@@ -167,7 +171,7 @@ describe('Books CRUD', () => {
     it('leaves availableCopies unchanged when the payload supplies it', async () => {
       const created = await createBook();
 
-      const res = await request(app)
+      const res = await authedRequest(app)
         .patch(`/books/${created.body.id}`)
         .send({ availableCopies: 0, author: 'Tolkien' });
 
@@ -175,7 +179,7 @@ describe('Books CRUD', () => {
       expect(res.body.author).toBe('Tolkien');
       expect(res.body.availableCopies).toBe(created.body.availableCopies);
 
-      const stored = await request(app).get(`/books/${created.body.id}`);
+      const stored = await authedRequest(app).get(`/books/${created.body.id}`);
       expect(stored.body.availableCopies).toBe(created.body.availableCopies);
     });
 
@@ -183,14 +187,14 @@ describe('Books CRUD', () => {
       const first = await createBook();
       const second = await createBook(otherBook);
 
-      const res = await request(app)
+      const res = await authedRequest(app)
         .patch(`/books/${second.body.id}`)
         .send({ isbn: first.body.isbn });
 
       expect(res.status).toBe(409);
       expect(typeof res.body.error).toBe('string');
 
-      const unchanged = await request(app).get(`/books/${second.body.id}`);
+      const unchanged = await authedRequest(app).get(`/books/${second.body.id}`);
       expect(unchanged.body.isbn).toBe(otherBook.isbn);
     });
 
@@ -198,7 +202,7 @@ describe('Books CRUD', () => {
       const created = await createBook({ ...sampleBook, totalCopies: 4 });
       expect(created.body.availableCopies).toBe(4);
 
-      const raised = await request(app)
+      const raised = await authedRequest(app)
         .patch(`/books/${created.body.id}`)
         .send({ totalCopies: 6 });
 
@@ -206,7 +210,7 @@ describe('Books CRUD', () => {
       expect(raised.body.totalCopies).toBe(6);
       expect(raised.body.availableCopies).toBe(6);
 
-      const lowered = await request(app)
+      const lowered = await authedRequest(app)
         .patch(`/books/${created.body.id}`)
         .send({ totalCopies: 2 });
 
@@ -221,17 +225,17 @@ describe('Books CRUD', () => {
       // Simulate three copies on loan: copies on loan = totalCopies - availableCopies.
       bookRepository.update(created.body.id, { availableCopies: 2 });
 
-      const loaned = await request(app).get(`/books/${created.body.id}`);
+      const loaned = await authedRequest(app).get(`/books/${created.body.id}`);
       expect(loaned.body.availableCopies).toBe(2);
 
-      const res = await request(app)
+      const res = await authedRequest(app)
         .patch(`/books/${created.body.id}`)
         .send({ totalCopies: 2 });
 
       expect(res.status).toBe(409);
       expect(typeof res.body.error).toBe('string');
 
-      const unchanged = await request(app).get(`/books/${created.body.id}`);
+      const unchanged = await authedRequest(app).get(`/books/${created.body.id}`);
       expect(unchanged.status).toBe(200);
       expect(unchanged.body.totalCopies).toBe(5);
       expect(unchanged.body.availableCopies).toBe(2);
@@ -240,14 +244,14 @@ describe('Books CRUD', () => {
     it('rejects a blank title with 400 and leaves the record unchanged', async () => {
       const created = await createBook();
 
-      const res = await request(app)
+      const res = await authedRequest(app)
         .patch(`/books/${created.body.id}`)
         .send({ title: '   ', author: 'Somebody Else' });
 
       expect(res.status).toBe(400);
       expect(typeof res.body.error).toBe('string');
 
-      const unchanged = await request(app).get(`/books/${created.body.id}`);
+      const unchanged = await authedRequest(app).get(`/books/${created.body.id}`);
       expect(unchanged.body.title).toBe(sampleBook.title);
       expect(unchanged.body.author).toBe(sampleBook.author);
     });
@@ -255,14 +259,14 @@ describe('Books CRUD', () => {
     it('rejects a totalCopies of 0 with 400 and leaves the record unchanged', async () => {
       const created = await createBook();
 
-      const res = await request(app)
+      const res = await authedRequest(app)
         .patch(`/books/${created.body.id}`)
         .send({ totalCopies: 0 });
 
       expect(res.status).toBe(400);
       expect(typeof res.body.error).toBe('string');
 
-      const unchanged = await request(app).get(`/books/${created.body.id}`);
+      const unchanged = await authedRequest(app).get(`/books/${created.body.id}`);
       expect(unchanged.body.totalCopies).toBe(sampleBook.totalCopies);
       expect(unchanged.body.availableCopies).toBe(sampleBook.totalCopies);
     });
@@ -272,14 +276,14 @@ describe('Books CRUD', () => {
     it('returns 204 and removes the book when no copies are on loan', async () => {
       const created = await createBook();
 
-      const res = await request(app).delete(`/books/${created.body.id}`);
+      const res = await authedRequest(app).delete(`/books/${created.body.id}`);
 
       expect(res.status).toBe(204);
 
-      const removed = await request(app).get(`/books/${created.body.id}`);
+      const removed = await authedRequest(app).get(`/books/${created.body.id}`);
       expect(removed.status).toBe(404);
 
-      const list = await request(app).get('/books');
+      const list = await authedRequest(app).get('/books');
       expect(list.body).toEqual([]);
     });
 
@@ -289,15 +293,15 @@ describe('Books CRUD', () => {
       // Simulate one copy on loan: copies on loan = totalCopies - availableCopies.
       bookRepository.update(created.body.id, { availableCopies: 1 });
 
-      const loaned = await request(app).get(`/books/${created.body.id}`);
+      const loaned = await authedRequest(app).get(`/books/${created.body.id}`);
       expect(loaned.body.availableCopies).toBe(1);
 
-      const res = await request(app).delete(`/books/${created.body.id}`);
+      const res = await authedRequest(app).delete(`/books/${created.body.id}`);
 
       expect(res.status).toBe(409);
       expect(typeof res.body.error).toBe('string');
 
-      const stillThere = await request(app).get(`/books/${created.body.id}`);
+      const stillThere = await authedRequest(app).get(`/books/${created.body.id}`);
       expect(stillThere.status).toBe(200);
       expect(stillThere.body.totalCopies).toBe(3);
       expect(stillThere.body.availableCopies).toBe(1);
@@ -306,7 +310,7 @@ describe('Books CRUD', () => {
     it('returns 404 for an unknown id', async () => {
       await createBook();
 
-      const res = await request(app).delete('/books/999');
+      const res = await authedRequest(app).delete('/books/999');
 
       expect(res.status).toBe(404);
       expect(typeof res.body.error).toBe('string');

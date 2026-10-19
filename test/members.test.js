@@ -1,8 +1,12 @@
-const request = require('supertest');
 const app = require('../src/app');
 const bookRepository = require('../src/repositories/bookRepository');
 const memberRepository = require('../src/repositories/memberRepository');
 const loanRepository = require('../src/repositories/loanRepository');
+const { authedRequest, signInLibrarian } = require('./helpers/auth');
+
+beforeAll(async () => {
+  await signInLibrarian(app);
+});
 
 const sampleMember = {
   name: 'Ada Lovelace',
@@ -22,11 +26,11 @@ const sampleBook = {
 };
 
 function createMember(payload = sampleMember) {
-  return request(app).post('/members').send(payload);
+  return authedRequest(app).post('/members').send(payload);
 }
 
 function createBook(payload = sampleBook) {
-  return request(app).post('/books').send(payload);
+  return authedRequest(app).post('/books').send(payload);
 }
 
 describe('Members CRUD', () => {
@@ -68,7 +72,7 @@ describe('Members CRUD', () => {
       expect(duplicate.status).toBe(409);
       expect(typeof duplicate.body.error).toBe('string');
 
-      const list = await request(app).get('/members');
+      const list = await authedRequest(app).get('/members');
       expect(list.body).toHaveLength(1);
       expect(list.body[0].email).toBe(sampleMember.email);
     });
@@ -94,7 +98,7 @@ describe('Members CRUD', () => {
         expect(res.status).toBe(400);
         expect(typeof res.body.error).toBe('string');
 
-        const list = await request(app).get('/members');
+        const list = await authedRequest(app).get('/members');
         expect(list.body).toEqual([]);
       });
     }
@@ -105,7 +109,7 @@ describe('Members CRUD', () => {
       const first = await createMember();
       const second = await createMember(otherMember);
 
-      const res = await request(app).get('/members');
+      const res = await authedRequest(app).get('/members');
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveLength(2);
@@ -120,7 +124,7 @@ describe('Members CRUD', () => {
     });
 
     it('returns an empty list when no members exist', async () => {
-      const res = await request(app).get('/members');
+      const res = await authedRequest(app).get('/members');
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual([]);
@@ -131,7 +135,7 @@ describe('Members CRUD', () => {
     it('returns 200 with the matching member', async () => {
       const created = await createMember();
 
-      const res = await request(app).get(`/members/${created.body.id}`);
+      const res = await authedRequest(app).get(`/members/${created.body.id}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual(created.body);
@@ -140,7 +144,7 @@ describe('Members CRUD', () => {
     it('returns 404 with an error body for an unknown id', async () => {
       await createMember();
 
-      const res = await request(app).get('/members/999');
+      const res = await authedRequest(app).get('/members/999');
 
       expect(res.status).toBe(404);
       expect(typeof res.body.error).toBe('string');
@@ -151,7 +155,7 @@ describe('Members CRUD', () => {
     it('updates the supplied fields', async () => {
       const created = await createMember();
 
-      const renamed = await request(app)
+      const renamed = await authedRequest(app)
         .patch(`/members/${created.body.id}`)
         .send({ name: 'Ada King' });
 
@@ -159,7 +163,7 @@ describe('Members CRUD', () => {
       expect(renamed.body.name).toBe('Ada King');
       expect(renamed.body.email).toBe(created.body.email);
 
-      const reEmailed = await request(app)
+      const reEmailed = await authedRequest(app)
         .patch(`/members/${created.body.id}`)
         .send({ email: '  ADA.King@Example.COM  ' });
 
@@ -167,7 +171,7 @@ describe('Members CRUD', () => {
       expect(reEmailed.body.email).toBe('ada.king@example.com');
       expect(reEmailed.body.name).toBe('Ada King');
 
-      const stored = await request(app).get(`/members/${created.body.id}`);
+      const stored = await authedRequest(app).get(`/members/${created.body.id}`);
       expect(stored.body.name).toBe('Ada King');
       expect(stored.body.email).toBe('ada.king@example.com');
     });
@@ -176,25 +180,25 @@ describe('Members CRUD', () => {
       const first = await createMember();
       const second = await createMember(otherMember);
 
-      const res = await request(app)
+      const res = await authedRequest(app)
         .patch(`/members/${second.body.id}`)
         .send({ email: 'ADA@Example.COM' });
 
       expect(res.status).toBe(409);
       expect(typeof res.body.error).toBe('string');
 
-      const unchanged = await request(app).get(`/members/${second.body.id}`);
+      const unchanged = await authedRequest(app).get(`/members/${second.body.id}`);
       expect(unchanged.body.email).toBe(otherMember.email);
       expect(unchanged.body.name).toBe(otherMember.name);
 
-      const firstUnchanged = await request(app).get(`/members/${first.body.id}`);
+      const firstUnchanged = await authedRequest(app).get(`/members/${first.body.id}`);
       expect(firstUnchanged.body.email).toBe(sampleMember.email);
     });
 
     it('returns 404 for an unknown id', async () => {
       await createMember();
 
-      const res = await request(app).patch('/members/999').send({ name: 'Nope' });
+      const res = await authedRequest(app).patch('/members/999').send({ name: 'Nope' });
 
       expect(res.status).toBe(404);
       expect(typeof res.body.error).toBe('string');
@@ -203,14 +207,14 @@ describe('Members CRUD', () => {
     it('rejects an invalid email with 400 and leaves the record unchanged', async () => {
       const created = await createMember();
 
-      const res = await request(app)
+      const res = await authedRequest(app)
         .patch(`/members/${created.body.id}`)
         .send({ email: 'not-an-email' });
 
       expect(res.status).toBe(400);
       expect(typeof res.body.error).toBe('string');
 
-      const unchanged = await request(app).get(`/members/${created.body.id}`);
+      const unchanged = await authedRequest(app).get(`/members/${created.body.id}`);
       expect(unchanged.body.email).toBe(sampleMember.email);
     });
   });
@@ -219,14 +223,14 @@ describe('Members CRUD', () => {
     it('returns 204 and removes the member when they have no active loans', async () => {
       const created = await createMember();
 
-      const res = await request(app).delete(`/members/${created.body.id}`);
+      const res = await authedRequest(app).delete(`/members/${created.body.id}`);
 
       expect(res.status).toBe(204);
 
-      const removed = await request(app).get(`/members/${created.body.id}`);
+      const removed = await authedRequest(app).get(`/members/${created.body.id}`);
       expect(removed.status).toBe(404);
 
-      const list = await request(app).get('/members');
+      const list = await authedRequest(app).get('/members');
       expect(list.body).toEqual([]);
     });
 
@@ -234,22 +238,22 @@ describe('Members CRUD', () => {
       const member = await createMember();
       const book = await createBook();
 
-      const loan = await request(app).post('/loans').send({
+      const loan = await authedRequest(app).post('/loans').send({
         bookId: book.body.id,
         memberId: member.body.id,
       });
       expect(loan.status).toBe(201);
 
-      const res = await request(app).delete(`/members/${member.body.id}`);
+      const res = await authedRequest(app).delete(`/members/${member.body.id}`);
 
       expect(res.status).toBe(409);
       expect(typeof res.body.error).toBe('string');
 
-      const stillThere = await request(app).get(`/members/${member.body.id}`);
+      const stillThere = await authedRequest(app).get(`/members/${member.body.id}`);
       expect(stillThere.status).toBe(200);
       expect(stillThere.body.email).toBe(sampleMember.email);
 
-      const list = await request(app).get('/members');
+      const list = await authedRequest(app).get('/members');
       expect(list.body.map((entry) => entry.id)).toContain(member.body.id);
     });
 
@@ -257,27 +261,27 @@ describe('Members CRUD', () => {
       const member = await createMember();
       const book = await createBook();
 
-      const loan = await request(app).post('/loans').send({
+      const loan = await authedRequest(app).post('/loans').send({
         bookId: book.body.id,
         memberId: member.body.id,
       });
       expect(loan.status).toBe(201);
 
-      const returned = await request(app).post(`/loans/${loan.body.id}/return`);
+      const returned = await authedRequest(app).post(`/loans/${loan.body.id}/return`);
       expect(returned.status).toBe(200);
 
-      const res = await request(app).delete(`/members/${member.body.id}`);
+      const res = await authedRequest(app).delete(`/members/${member.body.id}`);
 
       expect(res.status).toBe(204);
 
-      const list = await request(app).get('/members');
+      const list = await authedRequest(app).get('/members');
       expect(list.body).toEqual([]);
     });
 
     it('returns 404 for an unknown id', async () => {
       await createMember();
 
-      const res = await request(app).delete('/members/999');
+      const res = await authedRequest(app).delete('/members/999');
 
       expect(res.status).toBe(404);
       expect(typeof res.body.error).toBe('string');

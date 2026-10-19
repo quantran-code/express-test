@@ -1,8 +1,12 @@
-const request = require('supertest');
 const app = require('../src/app');
 const bookRepository = require('../src/repositories/bookRepository');
 const memberRepository = require('../src/repositories/memberRepository');
 const loanRepository = require('../src/repositories/loanRepository');
+const { authedRequest, signInLibrarian } = require('./helpers/auth');
+
+beforeAll(async () => {
+  await signInLibrarian(app);
+});
 
 // Overdue payload shape: the flat loan keys plus the system-set dueDate.
 const OVERDUE_LOAN_KEYS = [
@@ -25,7 +29,7 @@ let memberCounter = 0;
 async function seedBook(overrides = {}) {
   bookCounter += 1;
 
-  const res = await request(app)
+  const res = await authedRequest(app)
     .post('/books')
     .send({
       title: `Seeded Book ${bookCounter}`,
@@ -41,7 +45,7 @@ async function seedBook(overrides = {}) {
 async function seedMember(overrides = {}) {
   memberCounter += 1;
 
-  const res = await request(app)
+  const res = await authedRequest(app)
     .post('/members')
     .send({
       name: `Seeded Member ${memberCounter}`,
@@ -53,7 +57,7 @@ async function seedMember(overrides = {}) {
 }
 
 function borrow(bookId, memberId) {
-  return request(app).post('/loans').send({ bookId, memberId });
+  return authedRequest(app).post('/loans').send({ bookId, memberId });
 }
 
 /**
@@ -68,7 +72,7 @@ function backdateDueDate(loanId, isoDueDate) {
 }
 
 function getOverdue() {
-  return request(app).get('/loans/overdue');
+  return authedRequest(app).get('/loans/overdue');
 }
 
 describe('Loan due dates and GET /loans/overdue', () => {
@@ -180,7 +184,7 @@ describe('Loan due dates and GET /loans/overdue', () => {
     const pastDueDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     backdateDueDate(loan.body.id, pastDueDate);
 
-    const returned = await request(app).post(`/loans/${loan.body.id}/return`);
+    const returned = await authedRequest(app).post(`/loans/${loan.body.id}/return`);
     expect(returned.status).toBe(200);
     expect(returned.body.dueDate).toBeUndefined();
     expect(Object.keys(returned.body).sort()).toEqual(LOAN_KEYS);
