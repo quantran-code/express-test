@@ -4,7 +4,9 @@ const authRoutes = require('./auth');
 const bookRoutes = require('./books');
 const memberRoutes = require('./members');
 const loanRoutes = require('./loans');
+const reportRoutes = require('./reports');
 const { authenticate } = require('../middleware/authenticate');
+const { requireLibrarian } = require('../middleware/authorize');
 
 const router = express.Router();
 
@@ -14,5 +16,6 @@ router.use('/auth', authRoutes);
 router.use('/books', authenticate, bookRoutes);
 router.use('/members', authenticate, memberRoutes);
 router.use('/loans', authenticate, loanRoutes);
+router.use('/reports', authenticate, requireLibrarian, reportRoutes);
 
 module.exports = router;

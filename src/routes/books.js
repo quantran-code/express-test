@@ -1,5 +1,6 @@
 const express = require('express');
 const bookService = require('../services/bookService');
+const { requireLibrarian } = require('../middleware/authorize');
 
 const router = express.Router();
 
@@ -15,15 +16,15 @@ router.get('/:id', (req, res) => {
   res.status(200).json(bookService.getBook(req.params.id));
 });
 
-router.post('/', (req, res) => {
+router.post('/', requireLibrarian, (req, res) => {
   res.status(201).json(bookService.createBook(req.body));
 });
 
-router.patch('/:id', (req, res) => {
+router.patch('/:id', requireLibrarian, (req, res) => {
   res.status(200).json(bookService.updateBook(req.params.id, req.body));
 });
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', requireLibrarian, (req, res) => {
   bookService.deleteBook(req.params.id);
   res.status(204).end();
 });

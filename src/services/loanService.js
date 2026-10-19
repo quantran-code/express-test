@@ -70,13 +70,28 @@ function requireId(value, field, message) {
 
 /**
  * @param {object} payload
+ * @param {{ id: number, role: 'member' | 'librarian', memberId: number | null }} actingUser
  * @returns {{ id: number, bookId: number, memberId: number, borrowedAt: string, returnedAt: string | null }}
  */
-function borrowBook(payload) {
+function borrowBook(payload, actingUser) {
   const data = payload || {};
+  const caller = actingUser || {};
 
   const bookId = requireId(data.bookId, 'bookId', 'Book not found');
-  const memberId = requireId(data.memberId, 'memberId', 'Member not found');
+
+  // A member always borrows for themselves: a supplied memberId is ignored
+  // rather than validated, while a librarian must name the member explicitly.
+  let memberId;
+
+  if (caller.role === 'member') {
+    if (caller.memberId === null || caller.memberId === undefined) {
+      throw new HttpError(403, 'Forbidden');
+    }
+
+    memberId = caller.memberId;
+  } else {
+    memberId = requireId(data.memberId, 'memberId', 'Member not found');
+  }
 
   const book = bookRepository.findById(bookId);
 
@@ -125,14 +140,21 @@ function borrowBook(payload) {
 
 /**
  * @param {number | string} id
+ * @param {{ id: number, role: 'member' | 'librarian', memberId: number | null }} actingUser
  * @returns {{ id: number, bookId: number, memberId: number, borrowedAt: string, returnedAt: string | null }}
  */
-function returnLoan(id) {
+function returnLoan(id, actingUser) {
   const loanId = parseId(id, 'Loan not found');
   const loan = loanRepository.findById(loanId);
 
   if (!loan) {
     throw new HttpError(404, 'Loan not found');
+  }
+
+  const caller = actingUser || {};
+
+  if (caller.role !== 'librarian' && loan.memberId !== caller.memberId) {
+    throw new HttpError(403, 'Forbidden');
   }
 
   if (loan.returnedAt !== null) {

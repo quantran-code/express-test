@@ -74,9 +74,78 @@ function authedRequest(app) {
   };
 }
 
+/**
+ * Registers a member account and signs it in, without touching the cached
+ * librarian token.
+ *
+ * @param {import('express').Express} app
+ * @param {{ name?: string, email?: string, password?: string }} [overrides]
+ * @returns {Promise<{ accessToken: string, account: { id: number, memberId: number, name: string, email: string, role: 'member' } }>}
+ */
+async function registerAndSignInMember(app, overrides) {
+  const payload = {
+    name: 'Member Account',
+    email: 'member.account@example.com',
+    password: 'Member123!',
+    ...(overrides || {}),
+  };
+
+  const registered = await request(app).post('/auth/register').send(payload);
+
+  if (registered.status !== 201) {
+    throw new Error(
+      `Could not register a member (status ${registered.status})`,
+    );
+  }
+
+  const session = await request(app)
+    .post('/auth/login')
+    .send({ email: payload.email, password: payload.password });
+
+  if (
+    session.status !== 200 ||
+    typeof session.body.accessToken !== 'string' ||
+    session.body.accessToken === ''
+  ) {
+    throw new Error(
+      `Could not sign in the registered member (status ${session.status})`,
+    );
+  }
+
+  return { accessToken: session.body.accessToken, account: registered.body };
+}
+
+/**
+ * Same call sites as authedRequest(app), but every request carries the given
+ * bearer token instead of the cached librarian one.
+ *
+ * @param {import('express').Express} app
+ * @param {string} token
+ * @returns {{ get: Function, post: Function, patch: Function, put: Function, delete: Function }}
+ */
+function requestAs(app, token) {
+  /**
+   * @param {import('supertest').Test} test
+   * @returns {import('supertest').Test}
+   */
+  function authorize(test) {
+    return test.set('Authorization', `Bearer ${token}`);
+  }
+
+  return {
+    get: (url) => authorize(request(app).get(url)),
+    post: (url) => authorize(request(app).post(url)),
+    patch: (url) => authorize(request(app).patch(url)),
+    put: (url) => authorize(request(app).put(url)),
+    delete: (url) => authorize(request(app).delete(url)),
+  };
+}
+
 module.exports = {
   LIBRARIAN_EMAIL,
   LIBRARIAN_PASSWORD,
   signInLibrarian,
   authedRequest,
+  registerAndSignInMember,
+  requestAs,
 };
